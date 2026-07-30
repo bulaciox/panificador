@@ -1,33 +1,29 @@
-app = "panificador"
-primary_region = "mad"
+# fly.toml app configuration file generated for panificador on 2026-07-30T11:10:39Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'panificador'
+primary_region = 'cdg'
 
 [build]
 
 [env]
-  ASPNETCORE_URLS = "http://0.0.0.0:8080"
-  ConnectionStrings__Default = "Data Source=/data/todo.db"
-  TZ = "Europe/Madrid"
+  ASPNETCORE_URLS = 'http://0.0.0.0:8080'
+  ConnectionStrings__Default = 'Data Source=/data/todo.db'
+  TZ = 'Europe/Madrid'
+
+[[mounts]]
+  source = 'panificador_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 8080
   force_https = true
+  auto_stop_machines = 'suspend'
   auto_start_machines = true
-  # "suspend" guarda la memoria y despierta en 200-500 ms cuando entras.
-  auto_stop_machines = "suspend"
-  # A 0 solo pagas el volumen mientras no la uses; a 1 no se duerme nunca (~3,3 $/mes).
   min_machines_running = 0
-  # SQLite admite un solo escritor: nunca subir de una máquina.
-  max_machines_running = 1
-
-# La base de datos vive aquí y sobrevive a despliegues y reinicios.
-[mounts]
-  source = "panificador_data"
-  destination = "/data"
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
-
-# Sin [[http_service.checks]] a propósito: las comprobaciones periódicas de Fly cuentan
-# como actividad y la máquina no llegaría a suspenderse nunca. Para mirarlo a mano:
-# curl https://panificador.fly.dev/health
+  size = 'shared-cpu-1x'
+  memory = '512mb'
