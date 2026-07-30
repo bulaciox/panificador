@@ -1,0 +1,33 @@
+app = "panificador"
+primary_region = "mad"
+
+[build]
+
+[env]
+  ASPNETCORE_URLS = "http://0.0.0.0:8080"
+  ConnectionStrings__Default = "Data Source=/data/todo.db"
+  TZ = "Europe/Madrid"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_start_machines = true
+  # "suspend" guarda la memoria y despierta en 200-500 ms cuando entras.
+  auto_stop_machines = "suspend"
+  # A 0 solo pagas el volumen mientras no la uses; a 1 no se duerme nunca (~3,3 $/mes).
+  min_machines_running = 0
+  # SQLite admite un solo escritor: nunca subir de una máquina.
+  max_machines_running = 1
+
+# La base de datos vive aquí y sobrevive a despliegues y reinicios.
+[mounts]
+  source = "panificador_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+# Sin [[http_service.checks]] a propósito: las comprobaciones periódicas de Fly cuentan
+# como actividad y la máquina no llegaría a suspenderse nunca. Para mirarlo a mano:
+# curl https://panificador.fly.dev/health

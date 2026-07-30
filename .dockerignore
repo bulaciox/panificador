@@ -1,0 +1,14 @@
+# Todo lo que se genera dentro de la imagen o no debe viajar en ella
+**/node_modules
+**/dist
+**/bin
+**/obj
+server/TodoApp.Api/wwwroot
+*.db
+*.db-shm
+*.db-wal
+.git
+.github
+.claude
+.DS_Store
+README.md

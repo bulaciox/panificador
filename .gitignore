@@ -1,0 +1,19 @@
+# .NET
+bin/
+obj/
+*.user
+
+# Base de datos local
+*.db
+*.db-shm
+*.db-wal
+
+# Node
+node_modules/
+dist/
+
+# El front compilado se copia aquí al construir la imagen
+server/TodoApp.Api/wwwroot/
+
+# Sistema
+.DS_Store
