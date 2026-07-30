@@ -113,7 +113,7 @@ separa tus datos de internet.
    esta configuración en vez de adivinarla.
 2. En Fly, *Launch an App from GitHub* → conectar la cuenta y elegir el repositorio.
 3. Crear el volumen si el asistente no lo ha hecho: en el panel, *Volumes* → nombre
-   `panificador_data`, 1 GB, región `mad`.
+   `panificador_data`, 1 GB, región `cdg`.
 4. En *Secrets*, añadir `APP_PASSWORD`.
 5. Desde entonces, cada `git push` despliega (se activa en *Deployments → settings*).
 
@@ -122,8 +122,8 @@ separa tus datos de internet.
 ```bash
 brew install flyctl
 fly auth login
-fly launch --no-deploy --name panificador --region mad
-fly volumes create panificador_data --size 1 --region mad
+fly launch --no-deploy --name panificador --region cdg
+fly volumes create panificador_data --size 1 --region cdg
 fly secrets set APP_PASSWORD='una-contraseña-larga'
 fly deploy
 ```

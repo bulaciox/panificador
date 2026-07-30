@@ -1,5 +1,6 @@
 app = "panificador"
-primary_region = "mad"
+# Madrid no está disponible en el asistente de Fly; París es la más cercana a España.
+primary_region = "cdg"
 
 [build]
 
