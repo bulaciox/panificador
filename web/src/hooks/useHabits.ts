@@ -41,7 +41,13 @@ export function useHabitActions(onError: (message: string) => void) {
     onError: (error: Error) => onError(error.message),
   });
 
-  return { create, update, remove, cycleDay };
+  const reorder = useMutation({
+    mutationFn: api.reorderHabits,
+    onSuccess: refresh,
+    onError: (error: Error) => onError(error.message),
+  });
+
+  return { create, update, remove, cycleDay, reorder };
 }
 
 export type HabitActions = ReturnType<typeof useHabitActions>;

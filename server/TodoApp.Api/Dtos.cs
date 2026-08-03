@@ -83,3 +83,18 @@ public record UpdateHabitRequest(string? Name, string? Color);
 public record HabitEntryRequest(DateOnly? Date);
 
 public record LoginRequest(string Password);
+
+// ---------------------------------------------------------------- fortalezas
+
+public record StrengthNoteDto(Guid Id, string Text, string? Label, DateOnly Date, DateTimeOffset CreatedAt);
+
+public record StrengthDayDto(DateOnly Date, List<StrengthNoteDto> Notes);
+
+/// <summary>Etiqueta ya usada, para ofrecerla al escribir y ver en qué se es fuerte.</summary>
+public record StrengthLabelDto(string Name, int Count);
+
+public record StrengthFeedDto(List<StrengthDayDto> Days, List<StrengthLabelDto> Labels, int TodayCount);
+
+public record CreateStrengthRequest(string Text, string? Label, DateOnly? Date);
+
+public record UpdateStrengthRequest(string? Text, string? Label);

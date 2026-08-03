@@ -1,5 +1,15 @@
 import { useState } from "react";
-import { MoreHorizontal, Palette, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  MoreHorizontal,
+  Palette,
+  Pencil,
+  Plus,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +24,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { HabitActions } from "@/hooks/useHabits";
+import { useContainerWidth } from "@/hooks/useContainerWidth";
+import { useManualOrder } from "@/hooks/useManualOrder";
 import { HabitState, type Habit, type HabitDay } from "@/lib/api";
 import { dayNumber, weekdayAbbr } from "@/lib/dates";
 import {
@@ -24,6 +36,18 @@ import {
   streakAlpha,
 } from "@/lib/habits";
 import { cn } from "@/lib/utils";
+
+/** Referencia estable para cuando aún no han llegado los hábitos. */
+const EMPTY: Habit[] = [];
+
+// Medidas de la rejilla, para calcular cuántos días caben en el ancho disponible.
+const NAME_WIDTH = 116;
+const CELL_WIDTH = 40;
+const COUNTS_WIDTH = 138;
+/** Hoy y los tres días anteriores: lo mínimo que se muestra, aunque la pantalla sea pequeña. */
+const MIN_DAYS = 4;
+/** Por debajo de este ancho los contadores de semana, mes y año estorban más que ayudan. */
+const COUNTS_MIN_WIDTH = 560;
 
 interface HabitsViewProps {
   habits: Habit[] | undefined;
@@ -47,14 +71,35 @@ export function HabitsView({
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
 
-  if (isLoading && !habits) {
-    return <p className="px-2 py-8 text-sm text-muted-foreground">Cargando…</p>;
-  }
+  const { order, move } = useManualOrder(habits ?? EMPTY, (orderedIds) =>
+    actions.reorder.mutate(orderedIds),
+  );
 
-  const list = habits ?? [];
+  const { ref: gridRef, width } = useContainerWidth<HTMLDivElement>();
 
-  // Etiqueta + un día por columna + los tres contadores.
-  const columns = `minmax(116px, 160px) repeat(${days.length}, minmax(32px, 1fr)) repeat(3, 46px)`;
+  const list = order;
+
+  // En pantalla pequeña, hoy y los tres días anteriores, sin contadores: todo de un vistazo.
+  // A partir de ahí se añaden días hacia atrás según el sitio que haya, hasta las dos semanas.
+  const showCounts = width >= COUNTS_MIN_WIDTH;
+  const fitting = Math.floor((width - NAME_WIDTH - COUNTS_WIDTH) / CELL_WIDTH);
+  const dayCount =
+    width === 0
+      ? days.length
+      : showCounts
+        ? Math.max(MIN_DAYS, Math.min(days.length, fitting))
+        : MIN_DAYS;
+
+  const visibleDays = days.slice(-dayCount);
+  const visibleDates = new Set(visibleDays);
+
+  const columns = [
+    `minmax(${NAME_WIDTH}px, 160px)`,
+    `repeat(${visibleDays.length}, minmax(32px, 1fr))`,
+    showCounts ? "repeat(3, 46px)" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div>
@@ -67,13 +112,15 @@ export function HabitsView({
         </div>
       )}
 
-      <div className="overflow-x-auto pb-1">
-        {/* Por debajo de este ancho la rejilla se desplaza en lugar de apretujarse. */}
-        <div className="min-w-[730px]">
+      <div ref={gridRef} className="overflow-x-auto pb-1">
+        {isLoading && !habits ? (
+          <p className="px-2 py-8 text-sm text-muted-foreground">Cargando…</p>
+        ) : (
+        <div>
           {/* cabecera de días */}
           <div className="grid items-end" style={{ gridTemplateColumns: columns }}>
             <div />
-            {days.map((day) => (
+            {visibleDays.map((day) => (
               <div key={day} className="pb-1.5 text-center">
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
                   {weekdayAbbr(day)}
@@ -90,18 +137,19 @@ export function HabitsView({
                 </div>
               </div>
             ))}
-            {["semana", "mes", "año"].map((label) => (
-              <div
-                key={label}
-                className="pb-2 text-center text-[10px] leading-tight text-muted-foreground"
-              >
-                {label}
-              </div>
-            ))}
+            {showCounts &&
+              ["semana", "mes", "año"].map((label) => (
+                <div
+                  key={label}
+                  className="pb-2 text-center text-[10px] leading-tight text-muted-foreground"
+                >
+                  {label}
+                </div>
+              ))}
           </div>
 
           {/* una fila por hábito */}
-          {list.map((habit) => (
+          {list.map((habit, index) => (
             <div
               key={habit.id}
               className="group grid items-stretch"
@@ -121,6 +169,31 @@ export function HabitsView({
                 </div>
               ) : (
                 <div className="flex min-w-0 items-center gap-1 pr-2">
+                  {/* Flechas de orden: con ratón solo asoman al pasar por la fila; en pantalla
+                      táctil no hay cursor que las revele, así que ahí se quedan visibles. */}
+                  <div className="-ml-0.5 flex shrink-0 flex-col transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
+                    <button
+                      type="button"
+                      aria-label={`Subir ${habit.name}`}
+                      title="Subir"
+                      disabled={index === 0}
+                      onClick={() => move(habit.id, -1)}
+                      className="rounded py-[2px] text-faded hover:text-foreground disabled:opacity-30 disabled:hover:text-faded"
+                    >
+                      <ChevronUp className="size-3.5 md:size-3" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Bajar ${habit.name}`}
+                      title="Bajar"
+                      disabled={index === list.length - 1}
+                      onClick={() => move(habit.id, 1)}
+                      className="rounded py-[2px] text-faded hover:text-foreground disabled:opacity-30 disabled:hover:text-faded"
+                    >
+                      <ChevronDown className="size-3.5 md:size-3" />
+                    </button>
+                  </div>
+
                   <span
                     className="min-w-0 flex-1 truncate text-[14px] font-medium"
                     title={habit.name}
@@ -138,24 +211,31 @@ export function HabitsView({
                 </div>
               )}
 
-              {habit.days.map((day) => (
-                <HabitCell
-                  key={day.date}
-                  habit={habit}
-                  day={day}
-                  today={today}
-                  onClick={() =>
-                    actions.cycleDay.mutate({ id: habit.id, date: day.date })
-                  }
-                />
-              ))}
+              {habit.days
+                .filter((day) => visibleDates.has(day.date))
+                .map((day) => (
+                  <HabitCell
+                    key={day.date}
+                    habit={habit}
+                    day={day}
+                    today={today}
+                    onClick={() =>
+                      actions.cycleDay.mutate({ id: habit.id, date: day.date })
+                    }
+                  />
+                ))}
 
-              <Count value={habit.weekCount} />
-              <Count value={habit.monthCount} />
-              <Count value={habit.yearCount} />
+              {showCounts && (
+                <>
+                  <Count value={habit.weekCount} />
+                  <Count value={habit.monthCount} />
+                  <Count value={habit.yearCount} />
+                </>
+              )}
             </div>
           ))}
         </div>
+        )}
       </div>
 
       <div className="mt-3">
@@ -193,7 +273,8 @@ export function HabitsView({
         <p className="mt-4 text-[12px] leading-relaxed text-faded">
           Un clic marca el día como hecho y el color sube de intensidad. Un segundo clic lo deja
           en diagonal: día saltado, que conserva el color sin hacerlo crecer. No se pueden saltar
-          más de dos días seguidos. Un tercer clic borra la marca.
+          más de dos días seguidos. Un tercer clic borra la marca. Las flechas de la izquierda
+          del nombre cambian el orden de los hábitos.
         </p>
       )}
     </div>

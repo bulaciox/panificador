@@ -64,6 +64,30 @@ export interface Habit {
   days: HabitDay[];
 }
 
+export interface StrengthNote {
+  id: string;
+  text: string;
+  label: string | null;
+  date: string;
+  createdAt: string;
+}
+
+export interface StrengthDay {
+  date: string;
+  notes: StrengthNote[];
+}
+
+export interface StrengthLabel {
+  name: string;
+  count: number;
+}
+
+export interface StrengthFeed {
+  days: StrengthDay[];
+  labels: StrengthLabel[];
+  todayCount: number;
+}
+
 export interface Counts {
   today: number;
   upcoming: number;
@@ -177,6 +201,24 @@ export const api = {
   /** Un clic recorre los estados: sin marcar → cumplido → saltado → sin marcar. */
   cycleHabitDay: (id: string, date: string) =>
     post<void>(`/api/habits/${id}/entries`, { date }),
+
+  reorderHabits: (orderedIds: string[]) =>
+    post<void>("/api/habits/reorder", { orderedIds }),
+
+  strengths: (from: string, to: string) =>
+    request<StrengthFeed>(`/api/strengths?from=${from}&to=${to}`),
+
+  createStrength: (input: { text: string; label?: string | null; date?: string }) =>
+    post<StrengthNote>("/api/strengths", input),
+
+  updateStrength: (id: string, input: { text?: string; label?: string }) =>
+    request<StrengthNote>(`/api/strengths/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+
+  deleteStrength: (id: string) =>
+    request<void>(`/api/strengths/${id}`, { method: "DELETE" }),
 
   create: (input: CreateTaskInput) => post<Task>("/api/tasks", input),
 

@@ -9,6 +9,7 @@ import {
   Palette,
   Pencil,
   Plus,
+  Shield,
   Sun,
   Sunrise,
   Trash2,
@@ -37,7 +38,8 @@ export type View =
   | { kind: "upcoming" }
   | { kind: "archive" }
   | { kind: "folder"; id: string }
-  | { kind: "habits" };
+  | { kind: "habits" }
+  | { kind: "strengths" };
 
 interface SidebarProps {
   view: View;
@@ -69,7 +71,7 @@ export function Sidebar({
     <>
       {open && (
         <div
-          className="fixed inset-0 z-20 bg-black/30 md:hidden"
+          className="fixed inset-0 z-20 bg-black/40 md:hidden"
           onClick={onClose}
           aria-hidden
         />
@@ -77,7 +79,8 @@ export function Sidebar({
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-30 flex w-60 shrink-0 flex-col border-r border-border bg-muted/40 transition-transform md:sticky md:top-0 md:h-screen md:translate-x-0",
+          // Superpuesto necesita fondo opaco y sombra; ya fijo al lado, el tinte translúcido.
+          "fixed inset-y-0 left-0 z-30 flex w-60 shrink-0 flex-col border-r border-border bg-background shadow-xl transition-transform md:sticky md:top-0 md:h-screen md:translate-x-0 md:bg-muted/40 md:shadow-none",
           open ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -112,7 +115,7 @@ export function Sidebar({
             onClick={() => onSelect({ kind: "archive" })}
           />
 
-          {/* Los hábitos no son tareas, pero viven en el mismo menú: separados por un hueco. */}
+          {/* Hábitos y Fortalezas no son tareas, pero viven en el mismo menú: tras un hueco. */}
           <NavItem
             icon={<Flame className="size-4" />}
             label="Hábitos"
@@ -120,6 +123,13 @@ export function Sidebar({
             className="mt-2"
             active={view.kind === "habits"}
             onClick={() => onSelect({ kind: "habits" })}
+          />
+          <NavItem
+            icon={<Shield className="size-4" />}
+            label="Fortalezas"
+            count={undefined}
+            active={view.kind === "strengths"}
+            onClick={() => onSelect({ kind: "strengths" })}
           />
         </nav>
 

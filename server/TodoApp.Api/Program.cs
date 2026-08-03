@@ -178,6 +178,91 @@ api.MapGet("/counts", async (TodoDbContext db) =>
     return Results.Ok(new CountsDto(todayCount, upcoming, archived));
 });
 
+// ---------------------------------------------------------------- fortalezas
+
+// Momentos en los que se ha sido fuerte, agrupados por día (el más reciente primero)
+// para poder repasar los últimos días de un vistazo.
+api.MapGet("/strengths", async (DateOnly? from, DateOnly? to, TodoDbContext db) =>
+{
+    var today = Today();
+    var until = to ?? today;
+    var since = from ?? until.AddDays(-29);
+
+    var all = await db.StrengthNotes.AsNoTracking().ToListAsync();
+
+    var days = all
+        .Where(note => note.Date >= since && note.Date <= until)
+        .GroupBy(note => note.Date)
+        .OrderByDescending(group => group.Key)
+        .Select(group => new StrengthDayDto(
+            group.Key,
+            group.OrderByDescending(note => note.CreatedAt)
+                 .Select(note => new StrengthNoteDto(note.Id, note.Text, note.Label, note.Date, note.CreatedAt))
+                 .ToList()))
+        .ToList();
+
+    // Las etiquetas salen de todo el histórico: sirven para sugerir al escribir.
+    var labels = all
+        .Where(note => !string.IsNullOrWhiteSpace(note.Label))
+        .GroupBy(note => note.Label!)
+        .Select(group => new StrengthLabelDto(group.Key, group.Count()))
+        .OrderByDescending(label => label.Count)
+        .ThenBy(label => label.Name)
+        .Take(12)
+        .ToList();
+
+    return Results.Ok(new StrengthFeedDto(days, labels, all.Count(note => note.Date == today)));
+});
+
+api.MapPost("/strengths", async (CreateStrengthRequest req, TodoDbContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Text))
+        return Results.BadRequest(new { error = "Escribe en qué has sido fuerte." });
+
+    var note = new StrengthNote
+    {
+        Text = req.Text.Trim(),
+        Label = string.IsNullOrWhiteSpace(req.Label) ? null : req.Label.Trim(),
+        Date = req.Date ?? Today()
+    };
+
+    db.StrengthNotes.Add(note);
+    await db.SaveChangesAsync();
+
+    return Results.Created($"/api/strengths/{note.Id}",
+        new StrengthNoteDto(note.Id, note.Text, note.Label, note.Date, note.CreatedAt));
+});
+
+api.MapPatch("/strengths/{id:guid}", async (Guid id, UpdateStrengthRequest req, TodoDbContext db) =>
+{
+    var note = await db.StrengthNotes.FindAsync(id);
+    if (note is null) return Results.NotFound();
+
+    if (req.Text is not null)
+    {
+        if (string.IsNullOrWhiteSpace(req.Text))
+            return Results.BadRequest(new { error = "El texto no puede quedar vacío." });
+        note.Text = req.Text.Trim();
+    }
+
+    // Cadena vacía = quitar la etiqueta.
+    if (req.Label is not null)
+        note.Label = string.IsNullOrWhiteSpace(req.Label) ? null : req.Label.Trim();
+
+    await db.SaveChangesAsync();
+    return Results.Ok(new StrengthNoteDto(note.Id, note.Text, note.Label, note.Date, note.CreatedAt));
+});
+
+api.MapDelete("/strengths/{id:guid}", async (Guid id, TodoDbContext db) =>
+{
+    var note = await db.StrengthNotes.FindAsync(id);
+    if (note is null) return Results.NotFound();
+
+    db.StrengthNotes.Remove(note);
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});
+
 // ---------------------------------------------------------------- carpetas
 
 api.MapGet("/folders", async (TodoDbContext db) =>
@@ -352,6 +437,20 @@ api.MapPatch("/habits/{id:guid}", async (Guid id, UpdateHabitRequest req, TodoDb
     }
 
     if (!string.IsNullOrWhiteSpace(req.Color)) habit.Color = req.Color.Trim();
+
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});
+
+// Reordenar la lista de hábitos (el orden lo decide el usuario arrastrando).
+api.MapPost("/habits/reorder", async (ReorderRequest req, TodoDbContext db) =>
+{
+    var habits = await db.Habits.Where(h => req.OrderedIds.Contains(h.Id)).ToListAsync();
+    for (var i = 0; i < req.OrderedIds.Count; i++)
+    {
+        var habit = habits.FirstOrDefault(h => h.Id == req.OrderedIds[i]);
+        if (habit is not null) habit.SortOrder = i;
+    }
 
     await db.SaveChangesAsync();
     return Results.NoContent();

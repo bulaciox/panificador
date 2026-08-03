@@ -13,6 +13,8 @@ public class TodoDbContext(DbContextOptions<TodoDbContext> options) : DbContext(
 
     public DbSet<HabitEntry> HabitEntries => Set<HabitEntry>();
 
+    public DbSet<StrengthNote> StrengthNotes => Set<StrengthNote>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var task = modelBuilder.Entity<TodoTask>();
@@ -53,6 +55,12 @@ public class TodoDbContext(DbContextOptions<TodoDbContext> options) : DbContext(
             .WithOne(e => e.Habit)
             .HasForeignKey(e => e.HabitId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        var strength = modelBuilder.Entity<StrengthNote>();
+        strength.HasKey(s => s.Id);
+        strength.Property(s => s.Text).IsRequired().HasMaxLength(1000);
+        strength.Property(s => s.Label).HasMaxLength(60);
+        strength.HasIndex(s => s.Date);
 
         var entry = modelBuilder.Entity<HabitEntry>();
         entry.HasKey(e => e.Id);

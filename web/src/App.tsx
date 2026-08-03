@@ -12,9 +12,11 @@ import { HabitsView } from "@/components/HabitsView";
 import { LoginScreen } from "@/components/LoginScreen";
 import { Sidebar, type View } from "@/components/Sidebar";
 import { SortToggle } from "@/components/SortToggle";
+import { StrengthsView, strengthStreak } from "@/components/StrengthsView";
 import { UpcomingView } from "@/components/UpcomingView";
 import { Button } from "@/components/ui/button";
 import { useHabitActions, useHabits } from "@/hooks/useHabits";
+import { useStrengthActions, useStrengths } from "@/hooks/useStrengths";
 import {
   useArchive,
   useCounts,
@@ -107,6 +109,7 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
 
   const isDay = view.kind === "today";
   const isHabits = view.kind === "habits";
+  const isStrengths = view.kind === "strengths";
   // Fuera de la vista de un día, lo que se crea o se completa cuenta como de hoy.
   const viewedDate = isDay ? date : todayIso();
 
@@ -118,6 +121,15 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
 
   const habits = useHabits(habitDays[0], habitDays[habitDays.length - 1], isHabits);
   const habitActions = useHabitActions(setHabitError);
+
+  // Ventana de fortalezas: el último mes, para repasar los días anteriores.
+  const strengthWindow = useMemo(() => {
+    const today = todayIso();
+    return { from: shiftIso(today, -29), to: today };
+  }, []);
+
+  const strengths = useStrengths(strengthWindow.from, strengthWindow.to, isStrengths);
+  const strengthActions = useStrengthActions();
 
   const folders = useFolders();
   const counts = useCounts();
@@ -221,6 +233,13 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
               />
             )}
 
+            {isStrengths && (
+              <ViewHeader
+                title="Fortalezas"
+                subtitle={strengthSubtitle(strengthStreak(strengths.data))}
+              />
+            )}
+
             {showComposer && (
               <div className="mb-4">
                 <AddTaskBar
@@ -281,6 +300,14 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
               />
             )}
 
+            {isStrengths && (
+              <StrengthsView
+                feed={strengths.data}
+                isLoading={strengths.isLoading}
+                actions={strengthActions}
+              />
+            )}
+
             {isHabits && (
               <HabitsView
                 habits={habits.data}
@@ -297,6 +324,13 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
       </div>
     </FoldersProvider>
   );
+}
+
+/** El subtítulo de Fortalezas tira de la racha para dar un empujón. */
+function strengthSubtitle(streak: number): string {
+  if (streak === 0) return "Momentos en los que fuiste fuerte, día a día.";
+  if (streak === 1) return "Hoy ya has apuntado algo. Mañana, otra vez.";
+  return `${streak} días seguidos apuntando algo. No lo rompas.`;
 }
 
 function ViewHeader({

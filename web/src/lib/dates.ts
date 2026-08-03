@@ -37,6 +37,11 @@ export function subLabel(iso: string): string {
   return capitalize(format(fromIsoDate(iso), "EEEE d 'de' MMMM yyyy", { locale: es }));
 }
 
+/** Hora de un instante ISO ("18:42"), para saber en qué momento del día fue. */
+export function timeLabel(iso: string): string {
+  return format(new Date(iso), "HH:mm");
+}
+
 /** "vie 31 jul" para las píldoras de fecha de las listas. */
 export function shortDate(iso: string): string {
   const date = fromIsoDate(iso);

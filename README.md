@@ -49,6 +49,10 @@ de la cabecera alterna entre el orden manual y el orden por prioridad.
 fecha de vencimiento, ni carpeta, ni arrastre. Solo una rejilla de días, con hoy en la última
 columna a la derecha y el número dentro de un círculo verde.
 
+La rejilla se adapta al ancho disponible en vez de desplazarse en horizontal: en el móvil salen
+**hoy y los tres días anteriores**, sin los contadores de la derecha, y a medida que hay sitio se
+van añadiendo días hacia atrás hasta las dos semanas, con los contadores de vuelta.
+
 Cada celda tiene tres estados y se recorren a clics:
 
 | Clics | Estado | Aspecto |
@@ -57,11 +61,24 @@ Cada celda tiene tres estados y se recorren a clics:
 | 2 | Saltado | media celda en diagonal: **conserva la intensidad** conseguida pero no la sube |
 | 3 | Sin marcar | celda vacía, y la cadena se rompe |
 
+El orden de los hábitos lo decides tú con las flechas que hay a la izquierda de cada nombre.
+Solo asoman al pasar el cursor por encima de la fila, y en pantallas táctiles (donde no hay
+cursor que las revele) se quedan siempre visibles. El orden se guarda en el servidor.
+
 Los días saltados son la válvula de escape para no perder una racha por un día malo, y por eso
 están limitados: **no se pueden saltar más de dos días seguidos**. Al intentar el tercero la app
 lo rechaza y avisa. Los fines de semana sin marcar salen en gris claro para orientarse, y los
 contadores de la derecha (semana natural, mes y año) cuentan **solo días cumplidos**: los
 saltados mantienen el color pero no suman.
+
+**Fortalezas** (`Fortalezas` en la barra lateral) es una bitácora, no una lista de tareas ni
+una rejilla: aquí escribes los momentos en los que fuiste fuerte, sea resistir algo que quieres
+romper o hacer algo que te cuesta. Cada momento guarda su hora y una **etiqueta** opcional
+(gimnasio, comunicar…), que se crea sola a partir de las que ya has usado.
+
+Todo se agrupa por días, del más reciente al más antiguo, con los últimos 30 días a la vista.
+Esa es la idea: al escribir hoy ves debajo lo de los días anteriores y cuesta más dejar el día
+en blanco. El subtítulo lleva la cuenta de los días seguidos apuntando algo.
 
 **Otros días.** Desde el menú `⋯ → Mover a` (hoy, mañana, pasado mañana, dentro de una semana
 o una fecha concreta). Lo que caiga en un día posterior aparece en **Futuras**.
@@ -169,6 +186,9 @@ del navegador del usuario.
 | GET | `/api/habits?from=&to=` | Rejilla de hábitos con rachas y contadores |
 | POST | `/api/habits` · PATCH `/{id}` · DELETE `/{id}` | Crear, renombrar/recolorear, borrar |
 | POST | `/api/habits/{id}/entries` | Recorre el estado de un día (cumplido → saltado → nada) |
+| POST | `/api/habits/reorder` | Reordenar la lista de hábitos (lista de ids) |
+| GET | `/api/strengths?from=&to=` | Fortalezas por día, etiquetas usadas y cuántas van hoy |
+| POST | `/api/strengths` · PATCH `/{id}` · DELETE `/{id}` | Apuntar, editar y borrar un momento |
 | GET | `/api/auth/status` | `{ required, authenticated }` para saber si pedir contraseña |
 | POST | `/api/auth/login` \| `/logout` | Entrar con la contraseña / borrar la cookie |
 | GET | `/health` | Comprobación de vida (fuera del candado) |
@@ -185,6 +205,7 @@ server/TodoApp.Api/
   Models/TodoTask.cs       entidad tarea
   Models/Folder.cs         carpetas del usuario
   Models/Habit.cs          hábitos y su registro de días
+  Models/StrengthNote.cs   momentos de "he sido fuerte"
   Data/TodoDbContext.cs    EF Core
   TaskMapper.cs            estado relativo al día que se mira (arrastre, hecho hoy)
   HabitMapper.cs           rachas, contadores y límite de días saltados
@@ -193,6 +214,7 @@ web/src/
   App.tsx                  layout con barra lateral y enrutado de vistas
   components/Sidebar.tsx   nombre de la app, Hoy / Futuras / Archivo / Hábitos y carpetas
   components/HabitsView.tsx  la rejilla de hábitos
+  components/StrengthsView.tsx  la bitácora de fortalezas
   components/              TaskRow, DayView, UpcomingView, FolderView, ArchivePanel…
   components/ui/           primitivas estilo shadcn (button, dropdown-menu)
   hooks/                   React Query: useTasks, useHabits
