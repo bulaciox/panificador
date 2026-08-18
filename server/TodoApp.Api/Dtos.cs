@@ -21,7 +21,11 @@ public record TaskDto(
     int DaysCarried,
     /// <summary>Se completó justamente en el día que se está viendo (se pinta más clarita, sin tachar).</summary>
     bool CompletedOnViewedDay,
-    List<TaskDto> Children
+    List<TaskDto> Children,
+    /// <summary>Hora de inicio del bloque de agenda para el día que se está viendo (null = sin hora).</summary>
+    string? PlannedStart,
+    /// <summary>Duración del bloque en minutos (null = sin hora).</summary>
+    int? PlannedMinutes
 );
 
 public record DayDto(DateOnly Date, List<TaskDto> Tasks);
@@ -98,3 +102,6 @@ public record StrengthFeedDto(List<StrengthDayDto> Days, List<StrengthLabelDto> 
 public record CreateStrengthRequest(string Text, string? Label, DateOnly? Date);
 
 public record UpdateStrengthRequest(string? Text, string? Label);
+
+// ---------------------------------------------------------------- agenda
+public record PlanRequest(string StartTime, int DurationMinutes, DateOnly? Date);

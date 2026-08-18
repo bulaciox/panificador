@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { TaskCircle } from "@/components/TaskCircle";
+import { PlanMenuSub, PlanPill } from "@/components/PlanMenu";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -141,6 +142,20 @@ export function TaskRow({
             <RotateCcw className="size-3" />
             {carriedLabel(task.daysCarried)}
           </span>
+        )}
+
+        {/* Hora planificada: pulsable para asignar o cambiar directamente.
+            Si ya tiene hora se ve siempre; si no, aparece un chip tenue al pasar el cursor. */}
+        {depth === 0 && (task.plannedStart || !done) && (
+          <PlanPill
+            className={task.plannedStart ? "" : "opacity-0 group-hover:opacity-100"}
+            currentStart={task.plannedStart}
+            currentMinutes={task.plannedMinutes}
+            onPlan={(startTime, durationMinutes) =>
+              actions.plan.mutate({ id: task.id, startTime, durationMinutes, date: viewedDate })
+            }
+            onUnplan={() => actions.unplan.mutate(task.id)}
+          />
         )}
 
         {showDate && !task.carriedOver && (
@@ -310,6 +325,20 @@ export function TaskRow({
                   )}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+
+              <DropdownMenuSeparator />
+
+              {/* Planificar: solo en tareas raíz, no en subtareas */}
+              {depth === 0 && (
+                <PlanMenuSub
+                  currentStart={task.plannedStart}
+                  currentMinutes={task.plannedMinutes}
+                  onPlan={(startTime, durationMinutes) =>
+                    actions.plan.mutate({ id: task.id, startTime, durationMinutes, date: viewedDate })
+                  }
+                  onUnplan={() => actions.unplan.mutate(task.id)}
+                />
+              )}
 
               <DropdownMenuSeparator />
 

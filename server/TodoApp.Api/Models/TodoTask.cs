@@ -49,4 +49,14 @@ public class TodoTask
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public bool IsCompleted => CompletedOn is not null;
+
+    // ── Plan de agenda ────────────────────────────────────────────────────────
+    /// <summary>Día para el que está planificado el bloque. null = sin hora asignada.</summary>
+    public DateOnly? PlannedOn { get; set; }
+
+    /// <summary>Hora de inicio del bloque (hora local del usuario).</summary>
+    public TimeOnly? StartTime { get; set; }
+
+    /// <summary>Duración del bloque en minutos. Múltiplo de 5, entre 5 y 720.</summary>
+    public int? DurationMinutes { get; set; }
 }

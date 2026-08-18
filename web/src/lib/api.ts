@@ -26,6 +26,10 @@ export interface Task {
   /** Se completó justo el día que se está mirando. */
   completedOnViewedDay: boolean;
   children: Task[];
+  /** Hora de inicio del bloque de agenda para el día visto ("HH:mm"), null = sin hora. */
+  plannedStart: string | null;
+  /** Duración del bloque en minutos, null = sin hora. */
+  plannedMinutes: number | null;
 }
 
 export interface Day {
@@ -240,4 +244,9 @@ export const api = {
   reorder: (orderedIds: string[]) => post<void>("/api/tasks/reorder", { orderedIds }),
 
   remove: (id: string) => request<void>(`/api/tasks/${id}`, { method: "DELETE" }),
+
+  plan: (id: string, input: { startTime: string; durationMinutes: number; date?: string }) =>
+    post<Task>(`/api/tasks/${id}/plan`, input),
+
+  unplan: (id: string) => post<void>(`/api/tasks/${id}/unplan`),
 };

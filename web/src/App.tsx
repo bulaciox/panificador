@@ -4,6 +4,7 @@ import { Menu } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AddTaskBar } from "@/components/AddTaskBar";
+import { AgendaPanel } from "@/components/AgendaPanel";
 import { ArchivePanel } from "@/components/ArchivePanel";
 import { DayHeader } from "@/components/DayHeader";
 import { DayView } from "@/components/DayView";
@@ -91,6 +92,9 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
   const [view, setView] = useState<View>({ kind: "today" });
   const [date, setDate] = useState(todayIso());
   const [menuOpen, setMenuOpen] = useState(false);
+  const [agendaOpen, setAgendaOpen] = useState(
+    () => localStorage.getItem("agendaOpen") === "true",
+  );
   const [habitError, setHabitError] = useState<string | null>(null);
   const [sortByPriority, setSortByPriority] = useState(
     () => localStorage.getItem("sortByPriority") === "true",
@@ -99,6 +103,10 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
   useEffect(() => {
     localStorage.setItem("sortByPriority", String(sortByPriority));
   }, [sortByPriority]);
+
+  useEffect(() => {
+    localStorage.setItem("agendaOpen", String(agendaOpen));
+  }, [agendaOpen]);
 
   // Los avisos de hábitos (p. ej. el límite de días saltados) se van solos.
   useEffect(() => {
@@ -176,7 +184,9 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
           onClose={() => setMenuOpen(false)}
         />
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-1">
+          {/* columna principal */}
+          <div className="flex min-w-0 flex-1 flex-col">
           {/* En escritorio no hay barra superior: los controles viven en la cabecera de cada
               vista. Aquí arriba solo queda lo que el móvil necesita, con la lateral plegada. */}
           <header className="sticky top-0 z-10 flex items-center gap-1 border-b border-border bg-background/85 px-4 py-2 backdrop-blur md:hidden">
@@ -199,7 +209,7 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
             )}
           >
             {isDay && (
-              <DayHeader date={date} onChange={setDate} action={sortToggle} />
+              <DayHeader date={date} onChange={setDate} action={sortToggle} agendaOpen={agendaOpen} onToggleAgenda={() => setAgendaOpen((v) => !v)} />
             )}
 
             {view.kind === "upcoming" && (
@@ -320,6 +330,19 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
               />
             )}
           </main>
+          </div>
+
+          {/* Panel de agenda: solo en la vista de un día */}
+          {isDay && (
+            <AgendaPanel
+              open={agendaOpen}
+              onClose={() => setAgendaOpen(false)}
+              day={day.data}
+              viewedDate={date}
+              today={todayIso()}
+              actions={actions}
+            />
+          )}
         </div>
       </div>
     </FoldersProvider>

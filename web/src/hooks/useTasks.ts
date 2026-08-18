@@ -104,6 +104,26 @@ export function useTaskActions(viewedDate: string) {
 
   const reorder = useMutation({ mutationFn: api.reorder, onSuccess: refresh });
 
+  const plan = useMutation({
+    mutationFn: ({
+      id,
+      startTime,
+      durationMinutes,
+      date,
+    }: {
+      id: string;
+      startTime: string;
+      durationMinutes: number;
+      date?: string;
+    }) => api.plan(id, { startTime, durationMinutes, date }),
+    onSuccess: refresh,
+  });
+
+  const unplan = useMutation({
+    mutationFn: (id: string) => api.unplan(id),
+    onSuccess: refresh,
+  });
+
   return {
     create,
     update,
@@ -115,6 +135,8 @@ export function useTaskActions(viewedDate: string) {
     unhide,
     remove,
     reorder,
+    plan,
+    unplan,
   };
 }
 

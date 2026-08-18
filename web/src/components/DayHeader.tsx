@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { longLabel, shiftIso, subLabel, todayIso } from "@/lib/dates";
@@ -8,10 +8,13 @@ interface DayHeaderProps {
   onChange: (date: string) => void;
   /** Controles de la vista (el orden), a la izquierda de las flechas de día. */
   action?: React.ReactNode;
+  /** Estado del panel de agenda. */
+  agendaOpen: boolean;
+  onToggleAgenda: () => void;
 }
 
 /** Cabecera del día, con saltos discretos para revisar ayer o mañana. */
-export function DayHeader({ date, onChange, action }: DayHeaderProps) {
+export function DayHeader({ date, onChange, action, agendaOpen, onToggleAgenda }: DayHeaderProps) {
   const today = todayIso();
 
   return (
@@ -23,6 +26,15 @@ export function DayHeader({ date, onChange, action }: DayHeaderProps) {
 
       <div className="flex items-center gap-1">
         {action}
+        <Button
+          variant={agendaOpen ? "subtle" : "ghost"}
+          size="sm"
+          title={agendaOpen ? "Cerrar agenda del día" : "Abrir agenda del día"}
+          onClick={onToggleAgenda}
+        >
+          <CalendarClock className="size-4" />
+          Agenda
+        </Button>
         {date !== today && (
           <Button variant="subtle" size="sm" onClick={() => onChange(today)}>
             Volver a hoy

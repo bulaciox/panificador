@@ -568,10 +568,17 @@ api.MapPatch("/tasks/{id:guid}", async (Guid id, UpdateTaskRequest req, TodoDbCo
     {
         task.ScheduledDate = newDate;
         task.HiddenOn = null;
+        // El plan quedaba anclado a la fecha vieja; se limpia para que no aparezca en otro día.
+        task.PlannedOn = null;
+        task.StartTime = null;
+        task.DurationMinutes = null;
         foreach (var child in await DescendantsAsync(db, task.Id))
         {
             child.ScheduledDate = newDate;
             child.HiddenOn = null;
+            child.PlannedOn = null;
+            child.StartTime = null;
+            child.DurationMinutes = null;
         }
     }
 
@@ -710,6 +717,47 @@ api.MapPost("/tasks/{id:guid}/unhide", async (Guid id, TodoDbContext db) =>
     task.HiddenOn = null;
     foreach (var child in await DescendantsAsync(db, task.Id))
         child.HiddenOn = null;
+
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});
+
+// Planificar: asigna hora de inicio y duración al bloque de agenda de un día.
+// No bloquea solapamientos: si hay dos tareas a la misma hora se muestran en columnas.
+api.MapPost("/tasks/{id:guid}/plan", async (Guid id, PlanRequest req, TodoDbContext db) =>
+{
+    var task = await db.Tasks.FindAsync(id);
+    if (task is null) return Results.NotFound();
+    if (task.IsArchived) return Results.BadRequest(new { error = "Una tarea archivada no se puede planificar." });
+
+    if (!TimeOnly.TryParseExact(req.StartTime, "HH:mm", out var startTime))
+        return Results.BadRequest(new { error = "La hora de inicio no tiene el formato correcto (HH:mm)." });
+
+    if (req.DurationMinutes < 5 || req.DurationMinutes > 720 || req.DurationMinutes % 5 != 0)
+        return Results.BadRequest(new { error = "La duración debe ser un múltiplo de 5 entre 5 y 720 minutos." });
+
+    var endMinutes = startTime.Hour * 60 + startTime.Minute + req.DurationMinutes;
+    if (endMinutes > 1440)
+        return Results.BadRequest(new { error = "El bloque no cabe en el día (cruza la medianoche)." });
+
+    var date = req.Date ?? Today();
+    task.PlannedOn = date;
+    task.StartTime = startTime;
+    task.DurationMinutes = req.DurationMinutes;
+
+    await db.SaveChangesAsync();
+    return Results.Ok(await LoadDtoAsync(db, task.Id, date));
+});
+
+// Quitar de la agenda: el bloque desaparece del raíl pero la tarea sigue en la lista.
+api.MapPost("/tasks/{id:guid}/unplan", async (Guid id, TodoDbContext db) =>
+{
+    var task = await db.Tasks.FindAsync(id);
+    if (task is null) return Results.NotFound();
+
+    task.PlannedOn = null;
+    task.StartTime = null;
+    task.DurationMinutes = null;
 
     await db.SaveChangesAsync();
     return Results.NoContent();

@@ -18,6 +18,9 @@ public static class TaskMapper
                   .Select(c => ToDto(c, viewedDate, childrenByParent)).ToList()
             : [];
 
+        // El plan solo aplica al día que se está viendo.
+        var hasplan = task.PlannedOn == viewedDate && task.StartTime is not null && task.DurationMinutes is not null;
+
         return new TaskDto(
             task.Id,
             task.Title,
@@ -34,7 +37,9 @@ public static class TaskMapper
             carriedOver,
             daysCarried,
             task.CompletedOn == viewedDate,
-            children
+            children,
+            hasplan ? task.StartTime!.Value.ToString("HH:mm") : null,
+            hasplan ? task.DurationMinutes : null
         );
     }
 

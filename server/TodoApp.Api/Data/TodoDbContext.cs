@@ -40,6 +40,7 @@ public class TodoDbContext(DbContextOptions<TodoDbContext> options) : DbContext(
         task.HasIndex(t => t.IsArchived);
         task.HasIndex(t => t.ParentId);
         task.HasIndex(t => t.FolderId);
+        task.HasIndex(t => t.PlannedOn);
 
         var folder = modelBuilder.Entity<Folder>();
         folder.HasKey(f => f.Id);
