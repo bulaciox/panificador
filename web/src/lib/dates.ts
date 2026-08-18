@@ -68,13 +68,14 @@ export function dayNumber(iso: string): string {
   return format(fromIsoDate(iso), "d");
 }
 
-/** "hace 3 días" contando desde la fecha original de la tarea. */
+/** "3 días", "ayer"… contando desde la fecha original de la tarea. Corto a propósito. */
 export function carriedLabel(days: number): string {
-  if (days === 1) return "de ayer";
-  if (days < 7) return `hace ${days} días`;
-  if (days < 14) return "hace 1 semana";
-  if (days < 30) return `hace ${Math.floor(days / 7)} semanas`;
-  return `hace ${Math.floor(days / 30)} meses`;
+  if (days === 1) return "ayer";
+  if (days < 7) return `${days} días`;
+  if (days < 14) return "1 semana";
+  if (days < 30) return `${Math.floor(days / 7)} semanas`;
+  if (days < 60) return "1 mes";
+  return `${Math.floor(days / 30)} meses`;
 }
 
 function capitalize(value: string): string {

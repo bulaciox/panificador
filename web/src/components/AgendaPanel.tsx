@@ -29,8 +29,16 @@ export function AgendaPanel({
   actions,
 }: AgendaPanelProps) {
   const tasks = day?.tasks ?? [];
-  const planned = tasks.filter((t) => t.parentId === null && t.plannedStart !== null);
-  const unplanned = tasks.filter((t) => t.parentId === null && t.plannedStart === null && !t.isCompleted);
+  const planned = tasks.filter((t) => t.parentId === null && t.plannedStart != null);
+  // "Sin hora" solo lista lo asignado a este día; las arrastradas de días
+  // anteriores no forman parte del plan de hoy (aunque aparezcan en la lista).
+  const unplanned = tasks.filter(
+    (t) =>
+      t.parentId === null &&
+      t.plannedStart == null &&
+      !t.isCompleted &&
+      !t.carriedOver,
+  );
 
   const totalScheduled = planned.reduce((sum, t) => sum + (t.plannedMinutes ?? 0), 0);
   const summaryParts: string[] = [];
