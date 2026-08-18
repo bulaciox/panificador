@@ -19,7 +19,11 @@ public static class TaskMapper
             : [];
 
         // El plan solo aplica al día que se está viendo.
-        var hasplan = task.PlannedOn == viewedDate && task.StartTime is not null && task.DurationMinutes is not null;
+        // El plan solo aplica al día para el que se planificó: si la tarea se
+        // arrastra sin completar a otro día, no reaparece en el calendario hasta
+        // que se le asigne hora para ese mismo día.
+        var hasTime = task.StartTime is not null && task.DurationMinutes is not null;
+        var hasplan = hasTime && task.PlannedOn == viewedDate;
 
         return new TaskDto(
             task.Id,

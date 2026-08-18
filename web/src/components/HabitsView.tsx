@@ -42,7 +42,7 @@ const EMPTY: Habit[] = [];
 
 // Medidas de la rejilla, para calcular cuántos días caben en el ancho disponible.
 const NAME_WIDTH = 116;
-const CELL_WIDTH = 40;
+const CELL_WIDTH = 56;
 const COUNTS_WIDTH = 138;
 /** Hoy y los tres días anteriores: lo mínimo que se muestra, aunque la pantalla sea pequeña. */
 const MIN_DAYS = 4;
@@ -94,8 +94,9 @@ export function HabitsView({
   const visibleDates = new Set(visibleDays);
 
   const columns = [
-    `minmax(${NAME_WIDTH}px, 160px)`,
-    `repeat(${visibleDays.length}, minmax(32px, 1fr))`,
+    // El nombre absorbe el espacio sobrante (1fr) para que las celdas queden cuadradas.
+    `minmax(${NAME_WIDTH}px, 1fr)`,
+    `repeat(${visibleDays.length}, ${CELL_WIDTH}px)`,
     showCounts ? "repeat(3, 46px)" : "",
   ]
     .filter(Boolean)
@@ -320,7 +321,7 @@ function HabitCell({
       aria-label={`${habit.name}, ${day.date}: ${label}`}
       style={style}
       className={cn(
-        "h-10 w-full transition-[box-shadow]",
+        "h-14 w-full transition-[box-shadow]",
         !day.state && (weekend ? "bg-muted" : "bg-transparent"),
         future
           ? "cursor-default opacity-40"
@@ -332,7 +333,7 @@ function HabitCell({
 
 function Count({ value }: { value: number }) {
   return (
-    <div className="grid h-10 place-items-center text-[13px] tabular-nums text-muted-foreground">
+    <div className="grid h-14 place-items-center text-[13px] tabular-nums text-muted-foreground">
       {value}
     </div>
   );
