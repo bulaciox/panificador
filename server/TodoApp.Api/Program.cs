@@ -178,6 +178,49 @@ api.MapGet("/counts", async (TodoDbContext db) =>
     return Results.Ok(new CountsDto(todayCount, upcoming, archived));
 });
 
+// Análisis de productividad: cuántas tareas se completaron cada día del rango.
+// Cuenta todas las completadas (subtareas y archivadas incluidas): refleja todo el trabajo.
+api.MapGet("/analytics", async (DateOnly? from, DateOnly? to, TodoDbContext db) =>
+{
+    var today = Today();
+    var end = to ?? today;
+    var start = from ?? end.AddDays(-13); // por defecto, dos semanas
+
+    var completed = await db.Tasks.AsNoTracking()
+        .Where(t => t.CompletedOn != null)
+        .Select(t => t.CompletedOn!.Value)
+        .ToListAsync();
+
+    var counts = completed
+        .Where(d => d >= start && d <= end)
+        .GroupBy(d => d)
+        .ToDictionary(g => g.Key, g => g.Count());
+
+    // Lista continua de días (los vacíos cuentan como 0) para que las barras no tengan huecos.
+    var days = new List<AnalyticsDayDto>();
+    for (var d = start; d <= end; d = d.AddDays(1))
+        days.Add(new AnalyticsDayDto(d, counts.TryGetValue(d, out var c) ? c : 0));
+
+    var total = days.Sum(x => x.Count);
+    var bestDay = days.Count > 0 ? days.Max(x => x.Count) : 0;
+    var dayCount = days.Count == 0 ? 1 : days.Count;
+    var average = Math.Round((double)total / dayCount, 1);
+
+    // Racha de días productivos hasta hoy. Si hoy aún es 0 pero ayer no, la racha
+    // sigue viva desde ayer (no penaliza que todavía no hayas hecho nada hoy).
+    var streak = 0;
+    var cursor = today;
+    if (!counts.ContainsKey(today) && counts.ContainsKey(today.AddDays(-1)))
+        cursor = today.AddDays(-1);
+    while (counts.TryGetValue(cursor, out var c) && c > 0)
+    {
+        streak++;
+        cursor = cursor.AddDays(-1);
+    }
+
+    return Results.Ok(new AnalyticsDto(days, total, bestDay, streak, average));
+});
+
 // ---------------------------------------------------------------- fortalezas
 
 // Momentos en los que se ha sido fuerte, agrupados por día (el más reciente primero)

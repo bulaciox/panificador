@@ -98,6 +98,19 @@ export interface Counts {
   archived: number;
 }
 
+export interface AnalyticsDay {
+  date: string;
+  count: number;
+}
+
+export interface Analytics {
+  days: AnalyticsDay[];
+  total: number;
+  bestDay: number;
+  currentStreak: number;
+  dailyAverage: number;
+}
+
 export interface CreateTaskInput {
   title: string;
   scheduledDate?: string;
@@ -171,6 +184,9 @@ export const api = {
   upcoming: () => request<Day[]>("/api/upcoming"),
 
   counts: () => request<Counts>("/api/counts"),
+
+  analytics: (from: string, to: string) =>
+    request<Analytics>(`/api/analytics?from=${from}&to=${to}`),
 
   hidden: (date: string) => request<Task[]>(`/api/days/${date}/hidden`),
 

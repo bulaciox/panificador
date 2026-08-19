@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Archive,
+  BarChart3,
   CalendarClock,
   Flame,
   Folder as FolderIcon,
@@ -39,7 +40,8 @@ export type View =
   | { kind: "archive" }
   | { kind: "folder"; id: string }
   | { kind: "habits" }
-  | { kind: "strengths" };
+  | { kind: "strengths" }
+  | { kind: "analytics" };
 
 interface SidebarProps {
   view: View;
@@ -130,6 +132,13 @@ export function Sidebar({
             count={undefined}
             active={view.kind === "strengths"}
             onClick={() => onSelect({ kind: "strengths" })}
+          />
+          <NavItem
+            icon={<BarChart3 className="size-4" />}
+            label="Análisis"
+            count={undefined}
+            active={view.kind === "analytics"}
+            onClick={() => onSelect({ kind: "analytics" })}
           />
         </nav>
 

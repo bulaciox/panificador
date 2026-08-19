@@ -105,3 +105,21 @@ public record UpdateStrengthRequest(string? Text, string? Label);
 
 // ---------------------------------------------------------------- agenda
 public record PlanRequest(string StartTime, int DurationMinutes, DateOnly? Date);
+
+// ---------------------------------------------------------------- análisis
+
+/// <summary>Cuántas tareas se completaron un día concreto.</summary>
+public record AnalyticsDayDto(DateOnly Date, int Count);
+
+/// <summary>
+/// Resumen de productividad de un rango: barras por día más las métricas globales
+/// que sirven para motivar (total, mejor día, media y racha de días productivos).
+/// </summary>
+public record AnalyticsDto(
+    List<AnalyticsDayDto> Days,
+    int Total,
+    int BestDay,
+    int CurrentStreak,
+    double DailyAverage
+);
+

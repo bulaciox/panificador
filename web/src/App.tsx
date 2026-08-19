@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AddTaskBar } from "@/components/AddTaskBar";
 import { AgendaPanel } from "@/components/AgendaPanel";
+import { AnalyticsView } from "@/components/AnalyticsView";
 import { ArchivePanel } from "@/components/ArchivePanel";
 import { DayHeader } from "@/components/DayHeader";
 import { DayView } from "@/components/DayView";
@@ -16,6 +17,7 @@ import { SortToggle } from "@/components/SortToggle";
 import { StrengthsView, strengthStreak } from "@/components/StrengthsView";
 import { UpcomingView } from "@/components/UpcomingView";
 import { Button } from "@/components/ui/button";
+import { useAnalytics } from "@/hooks/useAnalytics";
 import { useHabitActions, useHabits } from "@/hooks/useHabits";
 import { useStrengthActions, useStrengths } from "@/hooks/useStrengths";
 import {
@@ -118,6 +120,7 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
   const isDay = view.kind === "today";
   const isHabits = view.kind === "habits";
   const isStrengths = view.kind === "strengths";
+  const isAnalytics = view.kind === "analytics";
   // Fuera de la vista de un día, lo que se crea o se completa cuenta como de hoy.
   const viewedDate = isDay ? date : todayIso();
 
@@ -138,6 +141,14 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
 
   const strengths = useStrengths(strengthWindow.from, strengthWindow.to, isStrengths);
   const strengthActions = useStrengthActions();
+
+  // Ventana de análisis: 1 ó 2 semanas, a elección del usuario.
+  const [analyticsWeeks, setAnalyticsWeeks] = useState<1 | 2>(2);
+  const analyticsWindow = useMemo(() => {
+    const today = todayIso();
+    return { from: shiftIso(today, -(analyticsWeeks * 7 - 1)), to: today };
+  }, [analyticsWeeks]);
+  const analytics = useAnalytics(analyticsWindow.from, analyticsWindow.to, isAnalytics);
 
   const folders = useFolders();
   const counts = useCounts();
@@ -258,6 +269,13 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
               />
             )}
 
+            {isAnalytics && (
+              <ViewHeader
+                title="Análisis"
+                subtitle={analyticsSubtitle(analytics.data?.currentStreak ?? 0)}
+              />
+            )}
+
             {showComposer && (
               <div className="mb-4">
                 <AddTaskBar
@@ -337,6 +355,16 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
                 onDismissError={() => setHabitError(null)}
               />
             )}
+
+            {isAnalytics && (
+              <AnalyticsView
+                data={analytics.data}
+                isLoading={analytics.isLoading}
+                weeks={analyticsWeeks}
+                onWeeksChange={setAnalyticsWeeks}
+                today={todayIso()}
+              />
+            )}
           </main>
           </div>
 
@@ -362,6 +390,13 @@ function strengthSubtitle(streak: number): string {
   if (streak === 0) return "Momentos en los que fuiste fuerte, día a día.";
   if (streak === 1) return "Hoy ya has apuntado algo. Mañana, otra vez.";
   return `${streak} días seguidos apuntando algo. No lo rompas.`;
+}
+
+/** El subtítulo de Análisis motiva según la racha de días productivos. */
+function analyticsSubtitle(streak: number): string {
+  if (streak === 0) return "Tu ritmo de tareas completadas, día a día.";
+  if (streak === 1) return "Un día productivo. A por el siguiente.";
+  return `${streak} días seguidos completando tareas. Sigue así.`;
 }
 
 function ViewHeader({
