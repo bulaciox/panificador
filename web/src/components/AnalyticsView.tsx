@@ -1,8 +1,8 @@
-import { BarChart3, Flame, Target, TrendingUp, Trophy } from "lucide-react";
+import { BarChart3, Flame, TrendingUp, Trophy } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { Analytics } from "@/lib/api";
-import { dayNumber, weekdayAbbr } from "@/lib/dates";
+import { weekdayAbbr } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 interface AnalyticsViewProps {
@@ -13,11 +13,6 @@ interface AnalyticsViewProps {
   today: string;
 }
 
-/**
- * Vista de Análisis: cuántas tareas se han completado por día en la última semana o
- * dos, con métricas de resumen para motivar a seguir cerrando tareas.
- * Pensada sobre todo para escritorio, donde suele consultarse.
- */
 export function AnalyticsView({
   data,
   isLoading,
@@ -47,169 +42,326 @@ export function AnalyticsView({
   if (isLoading && !data) {
     return (
       <div>
-        <div className="mb-5 flex justify-end">{rangeToggle}</div>
+        <div className="mb-5">{rangeToggle}</div>
         <p className="px-2 py-8 text-sm text-muted-foreground">Cargando…</p>
       </div>
     );
   }
 
   const days = data?.days ?? [];
-  const total = data?.total ?? 0;
 
   return (
     <div>
-      <div className="mb-5 flex justify-end">{rangeToggle}</div>
+      <div className="mb-4">{rangeToggle}</div>
 
-      {/* Tarjetas de resumen: en fila desde tablet hacia arriba */}
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard
-          icon={<BarChart3 className="size-4" />}
-          label="Total"
-          value={total}
-          hint="tareas hechas"
-        />
-        <StatCard
-          icon={<TrendingUp className="size-4" />}
-          label="Media"
-          value={data?.dailyAverage ?? 0}
-          hint="por día"
-        />
-        <StatCard
-          icon={<Trophy className="size-4" />}
-          label="Mejor día"
-          value={data?.bestDay ?? 0}
-          hint="tareas"
-        />
-        <StatCard
-          icon={<Flame className="size-4" />}
-          label="Racha"
-          value={data?.currentStreak ?? 0}
-          hint={data?.currentStreak === 1 ? "día" : "días"}
-          highlight={(data?.currentStreak ?? 0) > 0}
-        />
-      </div>
-
-      {total === 0 ? (
-        <div className="px-2 py-12 text-center">
-          <Target className="mx-auto mb-3 size-6 text-faded" />
-          <p className="text-sm text-muted-foreground">
-            Aún no has completado tareas en este periodo.
-          </p>
-          <p className="mx-auto mt-1 max-w-sm text-[13px] text-faded">
-            Marca tareas como hechas y aquí verás tu ritmo día a día. Empieza hoy.
-          </p>
+      {/* Layout principal: gráfico izquierda, tarjetas derecha */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        {/* Gráfico de línea */}
+        <div className="min-w-0 flex-1">
+          <LineChart days={days} today={today} />
         </div>
-      ) : (
-        <Chart days={days} today={today} />
-      )}
+
+        {/* Tarjetas de métricas */}
+        <div className="flex flex-row gap-3 lg:w-56 lg:flex-col">
+          <MetricCard
+            icon={<BarChart3 className="size-4" />}
+            label="TOTAL"
+            value={data?.total ?? 0}
+            unit="tareas hechas"
+            accent="violet"
+          />
+          <MetricCard
+            icon={<TrendingUp className="size-4" />}
+            label="MEDIA"
+            value={data?.dailyAverage ?? 0}
+            unit="por día"
+            accent="blue"
+          />
+          <MetricCard
+            icon={<Trophy className="size-4" />}
+            label="MEJOR DÍA"
+            value={data?.bestDay ?? 0}
+            unit="tareas"
+            accent="amber"
+          />
+          <MetricCard
+            icon={<Flame className="size-4" />}
+            label="RACHA"
+            value={data?.currentStreak ?? 0}
+            unit={data?.currentStreak === 1 ? "día" : "días"}
+            accent="orange"
+            badge={(data?.currentStreak ?? 0) > 0 ? "¡SIGUE ASÍ!" : undefined}
+          />
+        </div>
+      </div>
     </div>
   );
 }
 
-function StatCard({
+// ─── Tarjeta de métrica ───────────────────────────────────────────────────────
+
+const ACCENT_STYLES: Record<
+  string,
+  { border: string; iconBg: string; valueCn: string }
+> = {
+  violet: {
+    border: "border-violet-400/60 dark:border-violet-500/40",
+    iconBg: "text-violet-500",
+    valueCn: "",
+  },
+  blue: {
+    border: "border-blue-400/60 dark:border-blue-500/40",
+    iconBg: "text-accent",
+    valueCn: "",
+  },
+  amber: {
+    border: "border-amber-400/60 dark:border-amber-500/40",
+    iconBg: "text-amber-500",
+    valueCn: "",
+  },
+  orange: {
+    border: "border-orange-400/60 dark:border-orange-500/40",
+    iconBg: "text-orange-500",
+    valueCn: "text-orange-500",
+  },
+};
+
+function MetricCard({
   icon,
   label,
   value,
-  hint,
-  highlight = false,
+  unit,
+  accent,
+  badge,
 }: {
   icon: React.ReactNode;
   label: string;
   value: number;
-  hint: string;
-  highlight?: boolean;
+  unit: string;
+  accent: string;
+  badge?: string;
 }) {
+  const s = ACCENT_STYLES[accent] ?? ACCENT_STYLES.blue;
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
-      <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground [&_svg]:size-3.5">
+    <div
+      className={cn(
+        "flex-1 rounded-xl border-2 bg-surface p-3 lg:flex-none",
+        s.border,
+      )}
+    >
+      <div
+        className={cn(
+          "mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground [&_svg]:size-3.5",
+          s.iconBg,
+        )}
+      >
         {icon}
         {label}
       </div>
-      <div className="mt-1.5 flex items-baseline gap-1.5">
-        <span
-          className={cn(
-            "text-[28px] font-semibold tabular-nums leading-none",
-            highlight ? "text-accent" : "text-foreground",
-          )}
-        >
-          {value}
-        </span>
-        <span className="text-[11px] text-faded">{hint}</span>
+      <div className="flex items-end justify-between gap-2">
+        <div className="flex items-baseline gap-1.5">
+          <span className={cn("text-[26px] font-bold tabular-nums leading-none", s.valueCn)}>
+            {value}
+          </span>
+          <span className="text-[11px] text-faded">{unit}</span>
+        </div>
+        {badge && (
+          <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-600 dark:bg-orange-900/40 dark:text-orange-400">
+            {badge}
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
-const CHART_HEIGHT = 240;
+// ─── Gráfico de línea SVG ─────────────────────────────────────────────────────
 
-/** Gráfico de barras vertical, una por día. Altura proporcional al mejor día del rango. */
-function Chart({ days, today }: { days: Analytics["days"]; today: string }) {
-  const max = Math.max(1, ...days.map((d) => d.count));
+const SVG_W = 600;
+const SVG_H = 220;
+const PAD = { top: 28, right: 16, bottom: 40, left: 36 };
+const INNER_W = SVG_W - PAD.left - PAD.right;
+const INNER_H = SVG_H - PAD.top - PAD.bottom;
+
+function LineChart({
+  days,
+  today,
+}: {
+  days: Analytics["days"];
+  today: string;
+}) {
+  if (days.length === 0) {
+    return (
+      <div className="flex h-[220px] items-center justify-center rounded-xl border border-border bg-surface">
+        <p className="text-sm text-muted-foreground">Sin datos para este periodo.</p>
+      </div>
+    );
+  }
+
+  const counts = days.map((d) => d.count);
+  const maxVal = Math.max(...counts, 1);
+  const yMax = Math.ceil(maxVal / 5) * 5 + 2; // redondear al 5 superior
+  const bestIdx = counts.indexOf(Math.max(...counts));
+
+  const xStep = INNER_W / Math.max(days.length - 1, 1);
+
+  const px = (i: number) => PAD.left + i * xStep;
+  const py = (v: number) => PAD.top + INNER_H - (v / yMax) * INNER_H;
+
+  // Path de la línea
+  const linePts = days.map((d, i) => `${px(i)},${py(d.count)}`);
+  const linePath = `M ${linePts.join(" L ")}`;
+
+  // Path del área
+  const areaPath =
+    `M ${px(0)},${py(0)} ` +
+    days.map((d, i) => `L ${px(i)},${py(d.count)}`).join(" ") +
+    ` L ${px(days.length - 1)},${py(0)} Z`;
+
+  // Etiquetas del eje Y
+  const yTicks = [0, Math.round(yMax / 4), Math.round(yMax / 2), Math.round((3 * yMax) / 4), yMax];
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-5">
-      <div
-        className="flex items-end justify-between gap-2"
-        style={{ height: CHART_HEIGHT }}
+    <div className="overflow-hidden rounded-xl border border-border bg-surface">
+      <svg
+        viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+        className="w-full"
+        style={{ height: "auto", aspectRatio: `${SVG_W}/${SVG_H}` }}
+        aria-hidden
       >
-        {days.map((day) => {
-          const isToday = day.date === today;
-          // Altura en px proporcional al máximo; mínimo visible si hay >=1 tarea.
-          const barPx =
-            day.count === 0 ? 4 : Math.max(14, (day.count / max) * CHART_HEIGHT);
-          return (
-            <div
-              key={day.date}
-              className="flex h-full min-w-0 flex-1 flex-col justify-end"
-              title={`${day.count} ${day.count === 1 ? "tarea" : "tareas"}`}
-            >
-              {day.count > 0 && (
-                <span className="mb-1.5 text-center text-[12px] font-semibold tabular-nums text-foreground">
-                  {day.count}
-                </span>
-              )}
-              <div
-                className="w-full rounded-md transition-[height]"
-                style={{
-                  height: barPx,
-                  // Estilo inline: el modificador de opacidad de Tailwind no resuelve
-                  // sobre esta variable de color, así que fijamos el color a mano.
-                  backgroundColor:
-                    day.count === 0
-                      ? "var(--muted)"
-                      : isToday
-                        ? "var(--accent)"
-                        : "color-mix(in srgb, var(--accent) 55%, transparent)",
-                }}
-              />
-            </div>
-          );
-        })}
-      </div>
+        <defs>
+          <linearGradient id="areaGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.5" />
+            <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.2" />
+          </linearGradient>
+          <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#8b5cf6" />
+            <stop offset="100%" stopColor="#06b6d4" />
+          </linearGradient>
+          <clipPath id="chartClip">
+            <rect x={PAD.left} y={PAD.top} width={INNER_W} height={INNER_H} />
+          </clipPath>
+        </defs>
 
-      {/* Etiquetas de dia */}
-      <div className="mt-2.5 flex justify-between gap-2 border-t border-border pt-2.5">
-        {days.map((day) => {
-          const isToday = day.date === today;
+        {/* Líneas guía horizontales */}
+        {yTicks.slice(1).map((tick) => (
+          <line
+            key={tick}
+            x1={PAD.left}
+            y1={py(tick)}
+            x2={PAD.left + INNER_W}
+            y2={py(tick)}
+            stroke="currentColor"
+            strokeOpacity="0.08"
+            strokeWidth="1"
+          />
+        ))}
+
+        {/* Etiquetas eje Y */}
+        {yTicks.map((tick) => (
+          <text
+            key={tick}
+            x={PAD.left - 6}
+            y={py(tick) + 4}
+            textAnchor="end"
+            fontSize="10"
+            fill="currentColor"
+            opacity="0.4"
+          >
+            {tick}
+          </text>
+        ))}
+
+        {/* Área rellena */}
+        <path d={areaPath} fill="url(#areaGrad)" clipPath="url(#chartClip)" />
+
+        {/* Línea */}
+        <path
+          d={linePath}
+          fill="none"
+          stroke="url(#lineGrad)"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          clipPath="url(#chartClip)"
+        />
+
+        {/* Puntos */}
+        {days.map((d, i) => {
+          const isToday = d.date === today;
+          const isRecord = i === bestIdx && d.count > 0;
           return (
-            <div key={day.date} className="flex min-w-0 flex-1 flex-col items-center">
-              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                {weekdayAbbr(day.date)}
-              </span>
-              <span
-                className={cn(
-                  "mt-1 grid size-6 place-items-center text-[12px] tabular-nums",
-                  isToday
-                    ? "rounded-full bg-accent font-semibold text-white"
-                    : "text-muted-foreground",
-                )}
-              >
-                {dayNumber(day.date)}
-              </span>
-            </div>
+            <circle
+              key={d.date}
+              cx={px(i)}
+              cy={py(d.count)}
+              r={isToday ? 5 : isRecord ? 5 : 4}
+              fill={isToday ? "#8b5cf6" : "#06b6d4"}
+              stroke="white"
+              strokeWidth="1.5"
+            />
           );
         })}
-      </div>
+
+        {/* Tooltip "DÍA DE RÉCORD" */}
+        {bestIdx >= 0 && days[bestIdx]?.count > 0 && (() => {
+          const bx = px(bestIdx);
+          const by = py(days[bestIdx].count);
+          const label = "🎉 DÍA DE RÉCORD";
+          const boxW = label.length * 6.2 + 16;
+          const boxH = 22;
+          // Si está muy a la derecha, alinear a la izquierda
+          const tooltipX = bx + boxW / 2 > SVG_W - PAD.right
+            ? bx - boxW
+            : bx - boxW / 2;
+          return (
+            <g>
+              <rect
+                x={tooltipX}
+                y={by - boxH - 10}
+                width={boxW}
+                height={boxH}
+                rx="6"
+                fill="white"
+                stroke="#e5e7eb"
+                strokeWidth="1"
+                filter="drop-shadow(0 1px 3px rgba(0,0,0,0.10))"
+              />
+              <text
+                x={tooltipX + boxW / 2}
+                y={by - 10 - boxH / 2 + 4}
+                textAnchor="middle"
+                fontSize="9.5"
+                fontWeight="700"
+                fill="#374151"
+              >
+                {label}
+              </text>
+            </g>
+          );
+        })()}
+
+        {/* Etiquetas eje X */}
+        {days.map((d, i) => {
+          // Mostrar solo algunas etiquetas si hay muchos días para no amontonar
+          const show = days.length <= 7 ? true : i % 2 === 0 || i === days.length - 1;
+          if (!show) return null;
+          return (
+            <text
+              key={d.date}
+              x={px(i)}
+              y={SVG_H - 8}
+              textAnchor="middle"
+              fontSize="10"
+              fill="currentColor"
+              opacity={d.date === today ? "0.9" : "0.45"}
+              fontWeight={d.date === today ? "700" : "400"}
+            >
+              {weekdayAbbr(d.date)}
+            </text>
+          );
+        })}
+      </svg>
     </div>
   );
 }
