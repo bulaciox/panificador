@@ -68,28 +68,25 @@ export function AnalyticsView({
             label="TOTAL"
             value={data?.total ?? 0}
             unit="tareas hechas"
-            accent="violet"
           />
           <MetricCard
             icon={<TrendingUp className="size-4" />}
             label="MEDIA"
             value={data?.dailyAverage ?? 0}
             unit="por día"
-            accent="blue"
           />
           <MetricCard
             icon={<Trophy className="size-4" />}
             label="MEJOR DÍA"
             value={data?.bestDay ?? 0}
             unit="tareas"
-            accent="amber"
           />
           <MetricCard
             icon={<Flame className="size-4" />}
             label="RACHA"
             value={data?.currentStreak ?? 0}
             unit={data?.currentStreak === 1 ? "día" : "días"}
-            accent="orange"
+            highlight={(data?.currentStreak ?? 0) > 0}
             badge={(data?.currentStreak ?? 0) > 0 ? "¡SIGUE ASÍ!" : undefined}
           />
         </div>
@@ -100,73 +97,41 @@ export function AnalyticsView({
 
 // ─── Tarjeta de métrica ───────────────────────────────────────────────────────
 
-const ACCENT_STYLES: Record<
-  string,
-  { border: string; iconBg: string; valueCn: string }
-> = {
-  violet: {
-    border: "border-violet-400/60 dark:border-violet-500/40",
-    iconBg: "text-violet-500",
-    valueCn: "",
-  },
-  blue: {
-    border: "border-blue-400/60 dark:border-blue-500/40",
-    iconBg: "text-accent",
-    valueCn: "",
-  },
-  amber: {
-    border: "border-amber-400/60 dark:border-amber-500/40",
-    iconBg: "text-amber-500",
-    valueCn: "",
-  },
-  orange: {
-    border: "border-orange-400/60 dark:border-orange-500/40",
-    iconBg: "text-orange-500",
-    valueCn: "text-orange-500",
-  },
-};
-
 function MetricCard({
   icon,
   label,
   value,
   unit,
-  accent,
+  highlight = false,
   badge,
 }: {
   icon: React.ReactNode;
   label: string;
   value: number;
   unit: string;
-  accent: string;
+  highlight?: boolean;
   badge?: string;
 }) {
-  const s = ACCENT_STYLES[accent] ?? ACCENT_STYLES.blue;
   return (
-    <div
-      className={cn(
-        "flex-1 rounded-xl border-2 bg-surface p-3 lg:flex-none",
-        s.border,
-      )}
-    >
-      <div
-        className={cn(
-          "mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground [&_svg]:size-3.5",
-          s.iconBg,
-        )}
-      >
+    <div className="flex-1 rounded-xl border border-border bg-surface p-3 lg:flex-none">
+      <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground [&_svg]:size-3.5">
         {icon}
         {label}
       </div>
       <div className="flex items-end justify-between gap-2">
         <div className="flex items-baseline gap-1.5">
-          <span className={cn("text-[26px] font-bold tabular-nums leading-none", s.valueCn)}>
+          <span
+            className={cn(
+              "text-[26px] font-semibold tabular-nums leading-none",
+              highlight ? "text-accent" : "text-foreground",
+            )}
+          >
             {value}
           </span>
           <span className="text-[11px] text-faded">{unit}</span>
         </div>
         {badge && (
-          <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-600 dark:bg-orange-900/40 dark:text-orange-400">
+          <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-semibold text-accent">
             {badge}
           </span>
         )}
