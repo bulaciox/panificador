@@ -57,7 +57,12 @@ export function AgendaTimeline({
   const isToday = viewedDate === today;
 
   const [activeAnchor, setActiveAnchor] = useState<number | null>(null);
-  const active = activeAnchor !== null;
+  // Mientras `exiting=true` mantenemos la escala de zoom para que el bloque pueda
+  // animar hasta su posición final antes de que el raíl se contraiga a idle.
+  const [exiting, setExiting] = useState(false);
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const active = activeAnchor !== null || exiting;
+
   // Minuto bajo el cursor durante un drag externo (null = sin drag).
   const [dropMinute, setDropMinute] = useState<number | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -78,7 +83,7 @@ export function AgendaTimeline({
 
   const blocks = useMemo(() => assignColumns(rawBlocks), [JSON.stringify(rawBlocks)]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Densidad: en reposo se ajusta al alto del panel; al arrastrar, escala fija de zoom.
+  // Densidad: en reposo se ajusta al alto del panel; al arrastrar (o salir), escala fija de zoom.
   const win = useMemo(() => agendaWindow(blocks), [JSON.stringify(blocks)]); // eslint-disable-line react-hooks/exhaustive-deps
   const idlePxPerMin = fitPxPerMin(win.end - win.start, viewportHeight - VIEWPORT_PADDING);
   const pxPerMin = active ? ACTIVE_PX_PER_MIN : idlePxPerMin;
@@ -96,6 +101,15 @@ export function AgendaTimeline({
     const activeY = (activeAnchor - win.start) * ACTIVE_PX_PER_MIN;
     scroller.scrollTop = Math.max(0, activeY - idleY);
   }, [activeAnchor]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Arranca la fase de salida: mantiene el zoom 220ms mientras el bloque anima,
+  // luego lo apaga y el raíl se contrae a idle.
+  const startExit = () => {
+    setActiveAnchor(null);
+    setExiting(true);
+    if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+    exitTimerRef.current = setTimeout(() => setExiting(false), 220);
+  };
 
   const now = isToday ? nowMinute() : null;
 
@@ -151,7 +165,14 @@ export function AgendaTimeline({
   }
 
   return (
-    <div className="relative" style={{ height: scale.totalHeight }}>
+    <div
+      className="relative"
+      style={{
+        height: scale.totalHeight,
+        // Fase 2: el raíl se encoge suavemente a idle después de que el bloque ya animó.
+        transition: !active ? "height 260ms cubic-bezier(0.25,0.46,0.45,0.94)" : undefined,
+      }}
+    >
       {/* ── Etiquetas de hora ───────────────────────────────────────── */}
       {railLabels.map((m) => (
         <div
@@ -261,8 +282,12 @@ export function AgendaTimeline({
               pxPerMin={pxPerMin}
               animate={!active}
               scrollRef={scrollRef}
-              onDragStart={() => setActiveAnchor(block.startMinute)}
-              onDragEnd={() => setActiveAnchor(null)}
+              onDragStart={() => {
+                if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+                setExiting(false);
+                setActiveAnchor(block.startMinute);
+              }}
+              onDragEnd={startExit}
               onToggle={() =>
                 actions.toggleComplete.mutate({
                   id: block.id,
@@ -443,8 +468,10 @@ function AgendaBlock({
         left: leftStyle,
         width: widthStyle,
         transform: translateY ? `translateY(${translateY}px)` : undefined,
-        // Al volver a reposo, animar top/height; durante el arrastre, respuesta inmediata.
-        transition: animate && !dragging ? "top 0.18s ease, height 0.18s ease" : undefined,
+        // Fase 1: el bloque anima hacia su nueva posición en la escala de zoom (ease-out suave).
+        transition: animate && !dragging
+          ? "top 0.22s cubic-bezier(0.25,0.46,0.45,0.94), height 0.22s cubic-bezier(0.25,0.46,0.45,0.94)"
+          : undefined,
         ...bgStyle,
       }}
     >
