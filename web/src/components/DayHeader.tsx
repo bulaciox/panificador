@@ -33,7 +33,7 @@ export function DayHeader({ date, onChange, action, agendaOpen, onToggleAgenda, 
       {/* Columna derecha: contador arriba, botones abajo */}
       <div className="flex flex-col items-end gap-1">
         {showCount && (
-          <p className={cn("text-[13px] tabular-nums", allDone ? "text-accent font-semibold" : "text-muted-foreground")}>
+          <p className={cn("text-[15px] tabular-nums", allDone ? "text-accent font-semibold" : "text-muted-foreground")}>
             <span className={cn("font-semibold", allDone ? "text-accent" : "text-foreground")}>
               {doneTasks}
             </span>
