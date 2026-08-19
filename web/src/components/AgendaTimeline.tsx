@@ -108,7 +108,7 @@ export function AgendaTimeline({
     setActiveAnchor(null);
     setExiting(true);
     if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
-    exitTimerRef.current = setTimeout(() => setExiting(false), 220);
+    exitTimerRef.current = setTimeout(() => setExiting(false), 350);
   };
 
   const now = isToday ? nowMinute() : null;
@@ -170,7 +170,7 @@ export function AgendaTimeline({
       style={{
         height: scale.totalHeight,
         // Fase 2: el raíl se encoge suavemente a idle después de que el bloque ya animó.
-        transition: !active ? "height 260ms cubic-bezier(0.25,0.46,0.45,0.94)" : undefined,
+        transition: !active ? "height 600ms cubic-bezier(0.25,0.46,0.45,0.94)" : undefined,
       }}
     >
       {/* ── Etiquetas de hora ───────────────────────────────────────── */}
