@@ -209,7 +209,15 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
             )}
           >
             {isDay && (
-              <DayHeader date={date} onChange={setDate} action={sortToggle} agendaOpen={agendaOpen} onToggleAgenda={() => setAgendaOpen((v) => !v)} />
+              <DayHeader
+                date={date}
+                onChange={setDate}
+                action={sortToggle}
+                agendaOpen={agendaOpen}
+                onToggleAgenda={() => setAgendaOpen((v) => !v)}
+                doneTasks={day.data?.tasks.filter((t) => t.parentId === null && t.isCompleted).length}
+                totalTasks={day.data?.tasks.filter((t) => t.parentId === null).length}
+              />
             )}
 
             {view.kind === "upcoming" && (
