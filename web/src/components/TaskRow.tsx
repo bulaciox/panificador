@@ -91,9 +91,22 @@ export function TaskRow({
     actions.update.mutate({ id: task.id, input: { title } });
   };
 
+  // Arrastrable hacia la agenda solo si es raíz, pendiente y sin hora.
+  const draggable = depth === 0 && !done && !task.plannedStart;
+
   return (
     <li className={cn(depth > 0 && "ml-[11px] border-l border-border pl-4")}>
-      <div className="group flex items-center gap-3 rounded-lg px-2 py-[7px] transition-colors hover:bg-muted/60">
+      <div
+        draggable={draggable}
+        onDragStart={draggable ? (e) => {
+          e.dataTransfer.setData("text/task-id", task.id);
+          e.dataTransfer.effectAllowed = "copy";
+        } : undefined}
+        className={cn(
+          "group flex items-center gap-3 rounded-lg px-2 py-[7px] transition-colors hover:bg-muted/60",
+          draggable && "cursor-grab active:cursor-grabbing",
+        )}
+      >
         <TaskCircle
           completed={done}
           fresh={fresh}

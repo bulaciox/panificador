@@ -7,8 +7,10 @@ import { X } from "lucide-react";
 import { AgendaTimeline } from "@/components/AgendaTimeline";
 import { PlanPill } from "@/components/PlanMenu";
 import { Button } from "@/components/ui/button";
+import { useElementSize } from "@/hooks/useElementSize";
 import type { TaskActions } from "@/hooks/useTasks";
 import type { Day, Task } from "@/lib/api";
+import { formatTime } from "@/lib/agenda";
 import { cn } from "@/lib/utils";
 
 interface AgendaPanelProps {
@@ -28,6 +30,7 @@ export function AgendaPanel({
   today,
   actions,
 }: AgendaPanelProps) {
+  const { ref: scrollRef, height: viewportHeight } = useElementSize<HTMLDivElement>();
   const tasks = day?.tasks ?? [];
   const planned = tasks.filter((t) => t.parentId === null && t.plannedStart != null);
   // "Sin hora" solo lista lo asignado a este día; las arrastradas de días
@@ -88,7 +91,7 @@ export function AgendaPanel({
         </div>
 
         {/* Contenido: raíl + sin hora */}
-        <div className="flex-1 overflow-y-auto px-3 py-4">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4">
           {day === undefined ? (
             <p className="py-10 text-center text-sm text-muted-foreground">Cargando…</p>
           ) : (
@@ -98,6 +101,16 @@ export function AgendaPanel({
                 viewedDate={viewedDate}
                 today={today}
                 actions={actions}
+                scrollRef={scrollRef}
+                viewportHeight={viewportHeight}
+                onDropTask={(taskId, startMinute) =>
+                  actions.plan.mutate({
+                    id: taskId,
+                    startTime: formatTime(startMinute),
+                    durationMinutes: 30,
+                    date: viewedDate,
+                  })
+                }
               />
 
               {unplanned.length > 0 && (

@@ -4,24 +4,31 @@
  * Conceptos clave:
  *   - minute: minutos desde medianoche (0 = 00:00, 90 = 01:30…)
  *   - Block: tarea planificada ya convertida a coordenadas de tiempo
- *   - Scale: función y(minute) que convierte minutos en píxeles,
- *            con los huecos libres comprimidos para que el panel no sea
- *            una columna vacía kilométrica.
+ *   - Scale: función y(minute) lineal que convierte minutos en píxeles.
+ *
+ * La ventana visible es fija (7:00–22:00) para tener siempre lienzo donde
+ * arrastrar; se expande solo si hay bloques antes o después de esas horas.
  */
 
 // ─── Constantes de dibujo ─────────────────────────────────────────────────────
 
-/** Píxeles por minuto dentro de zonas con bloques. */
-export const PX_PER_MIN = 1.6;
+/** Densidad al arrastrar/redimensionar: 1.4 ≈ 84 px por hora (intervalos de 15 min cómodos). */
+export const ACTIVE_PX_PER_MIN = 1.4;
 
-/** Altura fija (px) de un hueco sin bloques (independientemente de cuántos minutos dure). */
-export const GAP_HEIGHT = 60;
+/** Límites de la densidad en reposo (fit-to-height), para no quedar ni gigante ni ilegible. */
+const IDLE_PX_PER_MIN_MIN = 0.4;
+const IDLE_PX_PER_MIN_MAX = 1.2;
 
-/** Margen de minutos por encima del primer bloque y por debajo del último. */
-const RAIL_MARGIN_MIN = 30;
+/** Ventana por defecto: de 7:00 a 22:00. */
+const DAY_START = 7 * 60;
+const DAY_END = 22 * 60;
 
-/** La ventana mínima (en minutos) que muestra el raíl aunque solo haya un bloque. */
-const MIN_WINDOW_SPAN = 120;
+/** Densidad en reposo que hace caber `windowMinutes` en `heightPx` (con recorte). */
+export function fitPxPerMin(windowMinutes: number, heightPx: number): number {
+  if (heightPx <= 0 || windowMinutes <= 0) return IDLE_PX_PER_MIN_MIN;
+  const raw = heightPx / windowMinutes;
+  return Math.max(IDLE_PX_PER_MIN_MIN, Math.min(IDLE_PX_PER_MIN_MAX, raw));
+}
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -147,74 +154,41 @@ export function assignColumns(blocks: Omit<Block, "col" | "cols">[]): Block[] {
   return blocks.map((b) => result.find((r) => r.id === b.id)!);
 }
 
-// ─── Escala con huecos comprimidos ────────────────────────────────────────────
+// ─── Escala lineal con ventana fija 7–22 ──────────────────────────────────────
+
+/** Ventana visible (minutos): 7–22 por defecto, expandida a la hora entera por los bloques. */
+export function agendaWindow(blocks: Block[]): { start: number; end: number } {
+  let start = DAY_START;
+  let end = DAY_END;
+  if (blocks.length > 0) {
+    const earliestStart = Math.min(...blocks.map((b) => b.startMinute));
+    const latestEnd = Math.max(...blocks.map((b) => b.endMinute));
+    start = Math.min(start, Math.floor(earliestStart / 60) * 60);
+    end = Math.max(end, Math.ceil(latestEnd / 60) * 60);
+  }
+  return { start: Math.max(0, start), end: Math.min(1440, end) };
+}
 
 /**
- * Construye la escala de tiempo a partir de los bloques planificados.
- * Los tramos del raíl cubiertos por al menos un bloque son lineales (PX_PER_MIN).
- * Los tramos libres se comprimen a GAP_HEIGHT fijo, sea cual sea su duración.
+ * Construye la escala de tiempo. La ventana va de 7:00 a 22:00 por defecto y se
+ * expande (a la hora entera) para incluir bloques que caigan antes o después.
+ * La escala es lineal con la densidad `pxPerMin` que se le pase (reposo o zoom).
  */
-export function buildScale(blocks: Block[]): Scale {
-  const hasBlocks = blocks.length > 0;
+export function buildScale(blocks: Block[], pxPerMin: number): Scale {
+  const { start: windowStart, end: windowEnd } = agendaWindow(blocks);
 
-  // Ventana visible.
-  const earliestStart = hasBlocks ? Math.min(...blocks.map((b) => b.startMinute)) : 480; // 08:00
-  const latestEnd = hasBlocks ? Math.max(...blocks.map((b) => b.endMinute)) : 600; // 10:00
-  const windowStart = Math.max(0, earliestStart - RAIL_MARGIN_MIN);
-  const windowEnd = Math.min(1440, Math.max(latestEnd + RAIL_MARGIN_MIN, windowStart + MIN_WINDOW_SPAN));
+  const totalHeight = (windowEnd - windowStart) * pxPerMin;
 
-  // Construir los tramos ocupados (unión de todos los bloques).
+  const y = (minute: number): number =>
+    Math.max(0, Math.min(totalHeight, (minute - windowStart) * pxPerMin));
+
+  // Huecos libres dentro de la ventana, para etiquetar el tiempo libre.
   const occupiedIntervals = mergeIntervals(
     blocks.map((b) => [b.startMinute, b.endMinute] as [number, number]),
   );
-
-  // Tramos libres dentro de la ventana.
-  const freeIntervals = invertIntervals(occupiedIntervals, windowStart, windowEnd);
-
-  // Construir la función y(minute) con los tramos comprimidos.
-  // Mapeamos segmentos a (minuteStart, minuteEnd, pxStart, pxEnd).
-  type Segment = { ms: number; me: number; ps: number; pe: number };
-  const segments: Segment[] = [];
-  let px = 0;
-
-  // Recorrer todos los tramos en orden.
-  const allIntervals = [
-    ...freeIntervals.map((iv) => ({ ...iv, free: true })),
-    ...occupiedIntervals.map((iv) => ({
-      start: Math.max(iv[0], windowStart),
-      end: Math.min(iv[1], windowEnd),
-      free: false,
-    })),
-  ]
-    .filter((iv) => iv.start < iv.end && iv.end > windowStart && iv.start < windowEnd)
-    .sort((a, b) => a.start - b.start);
-
-  for (const iv of allIntervals) {
-    const pxSpan = iv.free ? GAP_HEIGHT : (iv.end - iv.start) * PX_PER_MIN;
-    segments.push({ ms: iv.start, me: iv.end, ps: px, pe: px + pxSpan });
-    px += pxSpan;
-  }
-
-  const totalHeight = px;
-
-  function y(minute: number): number {
-    // Fuera de ventana: extrapolación lineal.
-    if (minute <= windowStart) return 0;
-    if (minute >= windowEnd) return totalHeight;
-    for (const seg of segments) {
-      if (minute >= seg.ms && minute <= seg.me) {
-        const t = (minute - seg.ms) / (seg.me - seg.ms);
-        return seg.ps + t * (seg.pe - seg.ps);
-      }
-    }
-    return totalHeight;
-  }
-
-  // Los huecos para el componente son los tramos libres dentro de la ventana.
-  const gaps: Gap[] = freeIntervals.map((iv) => ({
-    startMinute: iv.start,
-    endMinute: iv.end,
-  }));
+  const gaps: Gap[] = invertIntervals(occupiedIntervals, windowStart, windowEnd).map(
+    (iv) => ({ startMinute: iv.start, endMinute: iv.end }),
+  );
 
   return { y, totalHeight, windowStart, windowEnd, gaps };
 }
