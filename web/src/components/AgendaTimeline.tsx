@@ -15,6 +15,7 @@ import {
   assignColumns,
   blockLabel,
   buildScale,
+  dragWindow,
   fitPxPerMin,
   formatTime,
   gapLabel,
@@ -83,23 +84,48 @@ export function AgendaTimeline({
 
   const blocks = useMemo(() => assignColumns(rawBlocks), [JSON.stringify(rawBlocks)]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Densidad: en reposo se ajusta al alto del panel; al arrastrar (o salir), escala fija de zoom.
-  const win = useMemo(() => agendaWindow(blocks), [JSON.stringify(blocks)]); // eslint-disable-line react-hooks/exhaustive-deps
-  const idlePxPerMin = fitPxPerMin(win.end - win.start, viewportHeight - VIEWPORT_PADDING);
-  const pxPerMin = active ? ACTIVE_PX_PER_MIN : idlePxPerMin;
+  const now = isToday ? nowMinute() : null;
+
+  // Dos ventanas: la ajustada reparte el alto del panel solo entre las horas con tareas;
+  // la amplia (día completo) reaparece en cuanto hay un arrastre, para poder colocar a
+  // cualquier hora sin quedarse sin lienzo.
+  const idleWin = useMemo(
+    () => agendaWindow(blocks, now),
+    [JSON.stringify(blocks), now], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const wideWin = useMemo(
+    () => dragWindow(blocks, now),
+    [JSON.stringify(blocks), now], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  // Ventana amplia mientras se mueve un bloque (active) o se suelta una tarea de la lista.
+  const wide = active || dropMinute !== null;
+  const win = wide ? wideWin : idleWin;
+
+  // Densidad: en reposo se ajusta al alto del panel; al arrastrar un bloque, escala fija
+  // de zoom (nunca menor que la de reposo, para que ampliar no encoja el raíl).
+  const availableHeight = viewportHeight - VIEWPORT_PADDING;
+  const tightPxPerMin = fitPxPerMin(idleWin.end - idleWin.start, availableHeight);
+  const widePxPerMin = fitPxPerMin(wideWin.end - wideWin.start, availableHeight);
+  const pxPerMin = active
+    ? Math.max(ACTIVE_PX_PER_MIN, tightPxPerMin)
+    : wide
+      ? widePxPerMin
+      : tightPxPerMin;
 
   const scale = useMemo(
-    () => buildScale(blocks, pxPerMin),
-    [JSON.stringify(blocks), pxPerMin], // eslint-disable-line react-hooks/exhaustive-deps
+    () => buildScale(blocks, pxPerMin, win),
+    [JSON.stringify(blocks), pxPerMin, win], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // Al entrar en zoom, fijamos scrollTop para que el minuto agarrado no salte de sitio.
+  // Cada lado usa su propia ventana: se venía de la ajustada y se pasa a la amplia.
   useLayoutEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller || activeAnchor === null) return;
-    const idleY = (activeAnchor - win.start) * idlePxPerMin;
-    const activeY = (activeAnchor - win.start) * ACTIVE_PX_PER_MIN;
-    scroller.scrollTop = Math.max(0, activeY - idleY);
+    const fromY = (activeAnchor - idleWin.start) * tightPxPerMin;
+    const toY = (activeAnchor - wideWin.start) * pxPerMin;
+    scroller.scrollTop = Math.max(0, toY - fromY);
   }, [activeAnchor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Arranca la fase de salida: mantiene el zoom 220ms mientras el bloque anima,
@@ -110,8 +136,6 @@ export function AgendaTimeline({
     if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
     exitTimerRef.current = setTimeout(() => setExiting(false), 350);
   };
-
-  const now = isToday ? nowMinute() : null;
 
   // Etiquetas del raíl: cada hora en reposo, cada 15 min al ampliar. Se descartan
   // las que caerían demasiado juntas para no amontonarse.
@@ -202,7 +226,13 @@ export function AgendaTimeline({
           e.dataTransfer.dropEffect = "copy";
           setDropMinute(minuteFromClientY(e.clientY));
         }}
-        onDragLeave={() => setDropMinute(null)}
+        onDragLeave={(e) => {
+          // `dragleave` también salta al entrar en un hijo (un bloque, un hueco). Solo
+          // se apaga cuando el cursor sale de verdad de la capa de contenido, para que
+          // ni el indicador ni la ventana amplia parpadeen a mitad del arrastre.
+          if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+          setDropMinute(null);
+        }}
         onDrop={(e) => {
           e.preventDefault();
           const taskId = e.dataTransfer.getData("text/task-id");

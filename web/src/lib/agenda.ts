@@ -6,8 +6,11 @@
  *   - Block: tarea planificada ya convertida a coordenadas de tiempo
  *   - Scale: función y(minute) lineal que convierte minutos en píxeles.
  *
- * La ventana visible es fija (7:00–22:00) para tener siempre lienzo donde
- * arrastrar; se expande solo si hay bloques antes o después de esas horas.
+ * Hay dos ventanas visibles según lo que esté pasando:
+ *   - `agendaWindow`: en reposo, se ciñe a los bloques del día (± margen) para
+ *     repartir todo el alto del panel entre las horas que sí tienen tareas.
+ *   - `dragWindow`: mientras se arrastra, vuelve al día completo (7:00–22:00,
+ *     expandido por los bloques) para tener lienzo donde colocar a cualquier hora.
  */
 
 // ─── Constantes de dibujo ─────────────────────────────────────────────────────
@@ -19,9 +22,18 @@ export const ACTIVE_PX_PER_MIN = 1.4;
 const IDLE_PX_PER_MIN_MIN = 0.4;
 const IDLE_PX_PER_MIN_MAX = 1.2;
 
-/** Ventana por defecto: de 7:00 a 22:00. */
+/** Ventana por defecto al arrastrar: de 7:00 a 22:00. */
 const DAY_START = 7 * 60;
 const DAY_END = 22 * 60;
+
+/** Aire que se deja antes del primer bloque y después del último (luego se redondea a la hora). */
+const WINDOW_PAD = 30;
+
+/** Aire por debajo del marcador de "ahora", para no dejarlo pegado al borde. */
+const NOW_PAD = 60;
+
+/** Ventana ajustada mínima: un solo bloque corto no debe dejar un raíl ridículo. */
+const MIN_WINDOW_MINUTES = 180;
 
 /** Densidad en reposo que hace caber `windowMinutes` en `heightPx` (con recorte). */
 export function fitPxPerMin(windowMinutes: number, heightPx: number): number {
@@ -154,28 +166,94 @@ export function assignColumns(blocks: Omit<Block, "col" | "cols">[]): Block[] {
   return blocks.map((b) => result.find((r) => r.id === b.id)!);
 }
 
-// ─── Escala lineal con ventana fija 7–22 ──────────────────────────────────────
+// ─── Ventanas visibles ────────────────────────────────────────────────────────
 
-/** Ventana visible (minutos): 7–22 por defecto, expandida a la hora entera por los bloques. */
-export function agendaWindow(blocks: Block[]): { start: number; end: number } {
+/** Redondea hacia abajo a la hora entera. */
+const floorHour = (minute: number) => Math.floor(minute / 60) * 60;
+
+/** Redondea hacia arriba a la hora entera. */
+const ceilHour = (minute: number) => Math.ceil(minute / 60) * 60;
+
+/**
+ * Base del día: 7:00–22:00, expandida a la hora entera por los bloques que caigan fuera.
+ */
+function fullDayWindow(blocks: Block[]): { start: number; end: number } {
   let start = DAY_START;
   let end = DAY_END;
   if (blocks.length > 0) {
     const earliestStart = Math.min(...blocks.map((b) => b.startMinute));
     const latestEnd = Math.max(...blocks.map((b) => b.endMinute));
-    start = Math.min(start, Math.floor(earliestStart / 60) * 60);
-    end = Math.max(end, Math.ceil(latestEnd / 60) * 60);
+    start = Math.min(start, floorHour(earliestStart));
+    end = Math.max(end, ceilHour(latestEnd));
   }
   return { start: Math.max(0, start), end: Math.min(1440, end) };
 }
 
 /**
- * Construye la escala de tiempo. La ventana va de 7:00 a 22:00 por defecto y se
- * expande (a la hora entera) para incluir bloques que caigan antes o después.
- * La escala es lineal con la densidad `pxPerMin` que se le pase (reposo o zoom).
+ * Ventana amplia para arrastrar: el día completo, garantizando que contiene a la
+ * ajustada. Así ampliar nunca encoge el raíl y siempre hay lienzo de sobra donde
+ * colocar una tarea a cualquier hora.
  */
-export function buildScale(blocks: Block[], pxPerMin: number): Scale {
-  const { start: windowStart, end: windowEnd } = agendaWindow(blocks);
+export function dragWindow(
+  blocks: Block[],
+  now: number | null = null,
+): { start: number; end: number } {
+  const base = fullDayWindow(blocks);
+  const tight = agendaWindow(blocks, now);
+  return {
+    start: Math.min(base.start, tight.start),
+    end: Math.max(base.end, tight.end),
+  };
+}
+
+/**
+ * Ventana en reposo: se ciñe a los bloques del día (± `WINDOW_PAD`, a la hora entera)
+ * para que las horas con tareas se repartan todo el alto del panel. Si se está viendo
+ * hoy, se estira lo justo para que el marcador de "ahora" siga dentro con algo de aire.
+ * Sin bloques no hay nada a lo que ceñirse, así que se cae al día completo.
+ */
+export function agendaWindow(
+  blocks: Block[],
+  now: number | null = null,
+): { start: number; end: number } {
+  if (blocks.length === 0) return fullDayWindow(blocks);
+
+  const earliestStart = Math.min(...blocks.map((b) => b.startMinute));
+  const latestEnd = Math.max(...blocks.map((b) => b.endMinute));
+
+  let start = floorHour(earliestStart - WINDOW_PAD);
+  let end = ceilHour(latestEnd + WINDOW_PAD);
+
+  if (now !== null) {
+    start = Math.min(start, floorHour(now));
+    end = Math.max(end, ceilHour(now + NOW_PAD));
+  }
+
+  start = Math.max(0, start);
+  end = Math.min(1440, end);
+
+  // Ancho mínimo: se estira por abajo y, si choca con medianoche, por arriba.
+  if (end - start < MIN_WINDOW_MINUTES) {
+    end = Math.min(1440, start + MIN_WINDOW_MINUTES);
+    start = Math.max(0, end - MIN_WINDOW_MINUTES);
+  }
+
+  return { start, end };
+}
+
+// ─── Escala lineal ────────────────────────────────────────────────────────────
+
+/**
+ * Construye la escala de tiempo sobre la ventana que se le pase (ajustada en reposo,
+ * amplia al arrastrar). La escala es lineal con la densidad `pxPerMin` indicada, así que
+ * los huecos entre bloques conservan su tamaño real.
+ */
+export function buildScale(
+  blocks: Block[],
+  pxPerMin: number,
+  win: { start: number; end: number },
+): Scale {
+  const { start: windowStart, end: windowEnd } = win;
 
   const totalHeight = (windowEnd - windowStart) * pxPerMin;
 
