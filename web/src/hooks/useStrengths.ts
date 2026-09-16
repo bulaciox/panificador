@@ -2,10 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 
-export function useStrengths(from: string, to: string, enabled: boolean) {
+export function useStrengths(enabled: boolean) {
   return useQuery({
-    queryKey: ["strengths", from, to],
-    queryFn: () => api.strengths(from, to),
+    queryKey: ["strengths"],
+    queryFn: () => api.strengths(),
     enabled,
   });
 }

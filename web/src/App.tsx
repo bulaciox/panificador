@@ -133,13 +133,7 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
   const habits = useHabits(habitDays[0], habitDays[habitDays.length - 1], isHabits);
   const habitActions = useHabitActions(setHabitError);
 
-  // Ventana de fortalezas: el último mes, para repasar los días anteriores.
-  const strengthWindow = useMemo(() => {
-    const today = todayIso();
-    return { from: shiftIso(today, -29), to: today };
-  }, []);
-
-  const strengths = useStrengths(strengthWindow.from, strengthWindow.to, isStrengths);
+  const strengths = useStrengths(isStrengths);
   const strengthActions = useStrengthActions();
 
   // Ventana de análisis: 1 ó 2 semanas, a elección del usuario.

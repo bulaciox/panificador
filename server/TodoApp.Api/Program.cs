@@ -223,18 +223,15 @@ api.MapGet("/analytics", async (DateOnly? from, DateOnly? to, TodoDbContext db) 
 
 // ---------------------------------------------------------------- fortalezas
 
-// Momentos en los que se ha sido fuerte, agrupados por día (el más reciente primero)
-// para poder repasar los últimos días de un vistazo.
-api.MapGet("/strengths", async (DateOnly? from, DateOnly? to, TodoDbContext db) =>
+// Momentos en los que se ha sido fuerte, agrupados por día (el más reciente primero).
+// Es un historial de frases para repasar: se devuelve todo, sin ventana de fechas,
+// para no dar la sensación de que se perdió algo si hace tiempo que no se escribe.
+api.MapGet("/strengths", async (TodoDbContext db) =>
 {
     var today = Today();
-    var until = to ?? today;
-    var since = from ?? until.AddDays(-29);
-
     var all = await db.StrengthNotes.AsNoTracking().ToListAsync();
 
     var days = all
-        .Where(note => note.Date >= since && note.Date <= until)
         .GroupBy(note => note.Date)
         .OrderByDescending(group => group.Key)
         .Select(group => new StrengthDayDto(

@@ -225,8 +225,7 @@ export const api = {
   reorderHabits: (orderedIds: string[]) =>
     post<void>("/api/habits/reorder", { orderedIds }),
 
-  strengths: (from: string, to: string) =>
-    request<StrengthFeed>(`/api/strengths?from=${from}&to=${to}`),
+  strengths: () => request<StrengthFeed>("/api/strengths"),
 
   createStrength: (input: { text: string; label?: string | null; date?: string }) =>
     post<StrengthNote>("/api/strengths", input),
