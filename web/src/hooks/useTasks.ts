@@ -46,7 +46,7 @@ export function useTaskActions(viewedDate: string) {
   const queryClient = useQueryClient();
 
   const refresh = () => {
-    for (const key of ["day", "upcoming", "hidden", "archive", "folder", "folders", "counts"]) {
+    for (const key of ["day", "upcoming", "hidden", "archive", "folder", "folders", "counts", "analytics", "stale"]) {
       queryClient.invalidateQueries({ queryKey: [key] });
     }
   };
@@ -146,6 +146,8 @@ export function useFolderActions() {
     queryClient.invalidateQueries({ queryKey: ["folders"] });
     queryClient.invalidateQueries({ queryKey: ["folder"] });
     queryClient.invalidateQueries({ queryKey: ["day"] });
+    queryClient.invalidateQueries({ queryKey: ["upcoming"] });
+    queryClient.invalidateQueries({ queryKey: ["counts"] });
   };
 
   const create = useMutation({
@@ -155,8 +157,13 @@ export function useFolderActions() {
   });
 
   const update = useMutation({
-    mutationFn: ({ id, input }: { id: string; input: { name?: string; color?: string } }) =>
-      api.updateFolder(id, input),
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: string;
+      input: { name?: string; color?: string; isExcluded?: boolean };
+    }) => api.updateFolder(id, input),
     onSuccess: refresh,
   });
 

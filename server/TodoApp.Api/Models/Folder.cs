@@ -12,6 +12,9 @@ public class Folder
 
     public int SortOrder { get; set; }
 
+    /// <summary>Excluye las tareas de esta carpeta de Hoy, Futuras y contadores globales.</summary>
+    public bool IsExcluded { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
 
     public List<TodoTask> Tasks { get; set; } = [];

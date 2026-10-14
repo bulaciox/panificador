@@ -25,12 +25,14 @@ public record TaskDto(
     /// <summary>Hora de inicio del bloque de agenda para el día que se está viendo (null = sin hora).</summary>
     string? PlannedStart,
     /// <summary>Duración del bloque en minutos (null = sin hora).</summary>
-    int? PlannedMinutes
+    int? PlannedMinutes,
+    /// <summary>Días transcurridos desde que se creó la tarea hasta el día que se está viendo.</summary>
+    int TaskAge
 );
 
 public record DayDto(DateOnly Date, List<TaskDto> Tasks);
 
-public record FolderDto(Guid Id, string Name, string Color, int SortOrder, int Pending);
+public record FolderDto(Guid Id, string Name, string Color, int SortOrder, int Pending, bool IsExcluded);
 
 /// <summary>Contadores de la barra lateral.</summary>
 public record CountsDto(int Today, int Upcoming, int Archived);
@@ -59,7 +61,7 @@ public record ReorderRequest(List<Guid> OrderedIds);
 
 public record CreateFolderRequest(string Name, string? Color);
 
-public record UpdateFolderRequest(string? Name, string? Color);
+public record UpdateFolderRequest(string? Name, string? Color, bool? IsExcluded);
 
 // ---------------------------------------------------------------------- hábitos
 
@@ -111,15 +113,36 @@ public record PlanRequest(string StartTime, int DurationMinutes, DateOnly? Date)
 /// <summary>Cuántas tareas se completaron un día concreto.</summary>
 public record AnalyticsDayDto(DateOnly Date, int Count);
 
+/// <summary>Detalle de una tarea completada para el listado diario.</summary>
+public record AnalyticsCompletedTaskDto(
+    Guid Id,
+    string Title,
+    DateOnly CompletedOn,
+    Guid? FolderId,
+    string? FolderName,
+    string? FolderColor,
+    Priority Priority
+);
+
+/// <summary>Tareas completadas agrupadas por día para la última semana.</summary>
+public record AnalyticsCompletedDayDto(
+    DateOnly Date,
+    List<AnalyticsCompletedTaskDto> Tasks
+);
+
 /// <summary>
-/// Resumen de productividad de un rango: barras por día más las métricas globales
-/// que sirven para motivar (total, mejor día, media y racha de días productivos).
+/// Resumen de productividad: métricas globales, actividad del mes (heatmap) y desglose de la última semana.
 /// </summary>
 public record AnalyticsDto(
     List<AnalyticsDayDto> Days,
     int Total,
     int BestDay,
     int CurrentStreak,
-    double DailyAverage
+    double DailyAverage,
+    int MonthTotal,
+    string MonthName,
+    List<AnalyticsDayDto> MonthDays,
+    List<AnalyticsCompletedDayDto> WeekCompletedDays
 );
+
 

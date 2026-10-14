@@ -108,10 +108,17 @@ api.MapPost("/auth/logout", (HttpContext context) =>
 api.MapGet("/days/{date}", async (DateOnly date, TodoDbContext db) =>
 {
     var today = Today();
+    var excludedFolderIds = (await db.Folders.AsNoTracking()
+        .Where(f => f.IsExcluded)
+        .Select(f => f.Id)
+        .ToListAsync())
+        .ToHashSet();
+
     var all = await db.Tasks.AsNoTracking().Where(t => !t.IsArchived).ToListAsync();
 
     bool BelongsToDay(TodoTask t) =>
         t.HiddenOn != date &&
+        (t.FolderId == null || !excludedFolderIds.Contains(t.FolderId.Value)) &&
         ((t.ScheduledDate == date && t.CompletedOn is null)
          || t.CompletedOn == date
          || (date == today && t.ScheduledDate < date && t.CompletedOn is null));
@@ -131,8 +138,15 @@ api.MapGet("/days/{date}", async (DateOnly date, TodoDbContext db) =>
 // Lo que se ocultó "por hoy", para poder recuperarlo el mismo día.
 api.MapGet("/days/{date}/hidden", async (DateOnly date, TodoDbContext db) =>
 {
+    var excludedFolderIds = (await db.Folders.AsNoTracking()
+        .Where(f => f.IsExcluded)
+        .Select(f => f.Id)
+        .ToListAsync())
+        .ToHashSet();
+
     var hidden = await db.Tasks.AsNoTracking()
-        .Where(t => !t.IsArchived && t.HiddenOn == date && t.ParentId == null)
+        .Where(t => !t.IsArchived && t.HiddenOn == date && t.ParentId == null
+                    && (t.FolderId == null || !excludedFolderIds.Contains(t.FolderId.Value)))
         .OrderBy(t => t.ScheduledDate)
         .ToListAsync();
 
@@ -147,11 +161,18 @@ api.MapGet("/days/{date}/hidden", async (DateOnly date, TodoDbContext db) =>
 api.MapGet("/upcoming", async (TodoDbContext db) =>
 {
     var today = Today();
+    var excludedFolderIds = (await db.Folders.AsNoTracking()
+        .Where(f => f.IsExcluded)
+        .Select(f => f.Id)
+        .ToListAsync())
+        .ToHashSet();
+
     var all = await db.Tasks.AsNoTracking().Where(t => !t.IsArchived).ToListAsync();
     var childrenByParent = TaskMapper.GroupChildren(all);
 
     var groups = all
-        .Where(t => t.ParentId is null && t.CompletedOn is null && t.ScheduledDate > today)
+        .Where(t => t.ParentId is null && t.CompletedOn is null && t.ScheduledDate > today
+                    && (t.FolderId == null || !excludedFolderIds.Contains(t.FolderId.Value)))
         .GroupBy(t => t.ScheduledDate)
         .OrderBy(group => group.Key)
         .Select(group => new DayDto(
@@ -168,35 +189,96 @@ api.MapGet("/upcoming", async (TodoDbContext db) =>
 api.MapGet("/counts", async (TodoDbContext db) =>
 {
     var today = Today();
+    var excludedFolderIds = (await db.Folders.AsNoTracking()
+        .Where(f => f.IsExcluded)
+        .Select(f => f.Id)
+        .ToListAsync())
+        .ToHashSet();
+
     var all = await db.Tasks.AsNoTracking().ToListAsync();
 
     var todayCount = all.Count(t => !t.IsArchived && t.CompletedOn is null &&
-        t.HiddenOn != today && t.ScheduledDate <= today);
-    var upcoming = all.Count(t => !t.IsArchived && t.CompletedOn is null && t.ScheduledDate > today);
+        t.HiddenOn != today && t.ScheduledDate <= today &&
+        (t.FolderId == null || !excludedFolderIds.Contains(t.FolderId.Value)));
+    var upcoming = all.Count(t => !t.IsArchived && t.CompletedOn is null && t.ScheduledDate > today &&
+        (t.FolderId == null || !excludedFolderIds.Contains(t.FolderId.Value)));
     var archived = all.Count(t => t.IsArchived && t.ParentId is null);
 
     return Results.Ok(new CountsDto(todayCount, upcoming, archived));
 });
 
-// Análisis de productividad: cuántas tareas se completaron cada día del rango.
-// Cuenta todas las completadas (subtareas y archivadas incluidas): refleja todo el trabajo.
+// Análisis de productividad: cuántas tareas se completaron cada día del rango,
+// actividad del mes actual (heatmap) y desglose de tareas hechas la última semana.
 api.MapGet("/analytics", async (DateOnly? from, DateOnly? to, TodoDbContext db) =>
 {
     var today = Today();
-    var end = to ?? today;
-    var start = from ?? end.AddDays(-13); // por defecto, dos semanas
+    var monthStart = new DateOnly(today.Year, today.Month, 1);
+    var monthEnd = monthStart.AddMonths(1).AddDays(-1);
 
-    var completed = await db.Tasks.AsNoTracking()
+    var end = to ?? today;
+    var start = from ?? (monthStart < today.AddDays(-29) ? monthStart : today.AddDays(-29));
+
+    var completedTasks = await db.Tasks.AsNoTracking()
         .Where(t => t.CompletedOn != null)
-        .Select(t => t.CompletedOn!.Value)
         .ToListAsync();
 
-    var counts = completed
-        .Where(d => d >= start && d <= end)
-        .GroupBy(d => d)
+    // Mes actual para el heatmap y contador
+    var monthTasks = completedTasks
+        .Where(t => t.CompletedOn >= monthStart && t.CompletedOn <= monthEnd)
+        .ToList();
+    var monthTotal = monthTasks.Count;
+
+    var monthCounts = monthTasks
+        .GroupBy(t => t.CompletedOn!.Value)
         .ToDictionary(g => g.Key, g => g.Count());
 
-    // Lista continua de días (los vacíos cuentan como 0) para que las barras no tengan huecos.
+    var monthDays = new List<AnalyticsDayDto>();
+    for (var d = monthStart; d <= monthEnd; d = d.AddDays(1))
+        monthDays.Add(new AnalyticsDayDto(d, monthCounts.TryGetValue(d, out var c) ? c : 0));
+
+    // Últimos 5 días (hoy y los 4 anteriores) con el nombre y detalle de cada tarea
+    var weekStart = today.AddDays(-4);
+    var weekTasks = completedTasks
+        .Where(t => t.CompletedOn >= weekStart && t.CompletedOn <= today)
+        .ToList();
+
+    var folderIds = weekTasks
+        .Where(t => t.FolderId != null)
+        .Select(t => t.FolderId!.Value)
+        .Distinct()
+        .ToList();
+
+    var folders = await db.Folders.AsNoTracking()
+        .Where(f => folderIds.Contains(f.Id))
+        .ToDictionaryAsync(f => f.Id, f => (f.Name, f.Color));
+
+    var weekCompletedDays = new List<AnalyticsCompletedDayDto>();
+    for (var d = today; d >= weekStart; d = d.AddDays(-1))
+    {
+        var dayTasks = weekTasks
+            .Where(t => t.CompletedOn == d)
+            .OrderBy(t => t.SortOrder)
+            .ThenBy(t => t.CreatedAt)
+            .Select(t => new AnalyticsCompletedTaskDto(
+                t.Id,
+                t.Title,
+                t.CompletedOn!.Value,
+                t.FolderId,
+                t.FolderId != null && folders.TryGetValue(t.FolderId.Value, out var f) ? f.Name : null,
+                t.FolderId != null && folders.TryGetValue(t.FolderId.Value, out var fc) ? fc.Color : null,
+                t.Priority
+            ))
+            .ToList();
+
+        weekCompletedDays.Add(new AnalyticsCompletedDayDto(d, dayTasks));
+    }
+
+    // Estadísticas del periodo
+    var counts = completedTasks
+        .Where(d => d.CompletedOn >= start && d.CompletedOn <= end)
+        .GroupBy(d => d.CompletedOn!.Value)
+        .ToDictionary(g => g.Key, g => g.Count());
+
     var days = new List<AnalyticsDayDto>();
     for (var d = start; d <= end; d = d.AddDays(1))
         days.Add(new AnalyticsDayDto(d, counts.TryGetValue(d, out var c) ? c : 0));
@@ -206,19 +288,57 @@ api.MapGet("/analytics", async (DateOnly? from, DateOnly? to, TodoDbContext db) 
     var dayCount = days.Count == 0 ? 1 : days.Count;
     var average = Math.Round((double)total / dayCount, 1);
 
-    // Racha de días productivos hasta hoy. Si hoy aún es 0 pero ayer no, la racha
-    // sigue viva desde ayer (no penaliza que todavía no hayas hecho nada hoy).
+    // Racha
+    var allCounts = completedTasks
+        .GroupBy(t => t.CompletedOn!.Value)
+        .ToDictionary(g => g.Key, g => g.Count());
+
     var streak = 0;
     var cursor = today;
-    if (!counts.ContainsKey(today) && counts.ContainsKey(today.AddDays(-1)))
+    if (!allCounts.ContainsKey(today) && allCounts.ContainsKey(today.AddDays(-1)))
         cursor = today.AddDays(-1);
-    while (counts.TryGetValue(cursor, out var c) && c > 0)
+    while (allCounts.TryGetValue(cursor, out var c) && c > 0)
     {
         streak++;
         cursor = cursor.AddDays(-1);
     }
 
-    return Results.Ok(new AnalyticsDto(days, total, bestDay, streak, average));
+    var culture = new System.Globalization.CultureInfo("es-ES");
+    var rawMonthName = culture.DateTimeFormat.GetMonthName(today.Month);
+    var monthName = char.ToUpper(rawMonthName[0]) + rawMonthName.Substring(1) + " " + today.Year;
+
+    return Results.Ok(new AnalyticsDto(
+        days,
+        total,
+        bestDay,
+        streak,
+        average,
+        monthTotal,
+        monthName,
+        monthDays,
+        weekCompletedDays
+    ));
+});
+
+// Tareas estancadas: llevan 7 o más días creadas y siguen pendientes.
+api.MapGet("/analytics/stale", async (TodoDbContext db) =>
+{
+    var today = Today();
+    var threshold = today.AddDays(-7);
+
+    var stale = await db.Tasks.AsNoTracking()
+        .Where(t => !t.IsArchived && t.CompletedOn == null && t.ParentId == null)
+        .ToListAsync();
+
+    var childrenByParent = TaskMapper.GroupChildren(stale);
+
+    var results = stale
+        .OrderBy(t => t.CreatedAt)
+        .Take(15)
+        .Select(t => TaskMapper.ToDto(t, today, childrenByParent))
+        .ToList();
+
+    return Results.Ok(results);
 });
 
 // ---------------------------------------------------------------- fortalezas
@@ -322,7 +442,7 @@ api.MapGet("/folders", async (TodoDbContext db) =>
 
     return Results.Ok(folders
         .Select(f => new FolderDto(f.Id, f.Name, f.Color, f.SortOrder,
-            counts.TryGetValue(f.Id, out var count) ? count : 0))
+            counts.TryGetValue(f.Id, out var count) ? count : 0, f.IsExcluded))
         .ToList());
 });
 
@@ -362,7 +482,7 @@ api.MapPost("/folders", async (CreateFolderRequest req, TodoDbContext db) =>
     await db.SaveChangesAsync();
 
     return Results.Created($"/api/folders/{folder.Id}",
-        new FolderDto(folder.Id, folder.Name, folder.Color, folder.SortOrder, 0));
+        new FolderDto(folder.Id, folder.Name, folder.Color, folder.SortOrder, 0, false));
 });
 
 api.MapPatch("/folders/{id:guid}", async (Guid id, UpdateFolderRequest req, TodoDbContext db) =>
@@ -379,8 +499,10 @@ api.MapPatch("/folders/{id:guid}", async (Guid id, UpdateFolderRequest req, Todo
 
     if (!string.IsNullOrWhiteSpace(req.Color)) folder.Color = req.Color.Trim();
 
+    if (req.IsExcluded is not null) folder.IsExcluded = req.IsExcluded.Value;
+
     await db.SaveChangesAsync();
-    return Results.Ok(new FolderDto(folder.Id, folder.Name, folder.Color, folder.SortOrder, 0));
+    return Results.Ok(new FolderDto(folder.Id, folder.Name, folder.Color, folder.SortOrder, 0, folder.IsExcluded));
 });
 
 // Borrar la carpeta no borra sus tareas: se quedan sin carpeta.

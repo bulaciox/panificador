@@ -1,332 +1,440 @@
-import { BarChart3, Flame, TrendingUp, Trophy } from "lucide-react";
+import {
+  Archive,
+  Calendar,
+  CalendarDays,
+  CheckCircle2,
+  Hourglass,
+} from "lucide-react";
 
+import { TaskCircle } from "@/components/TaskCircle";
 import { Button } from "@/components/ui/button";
-import type { Analytics } from "@/lib/api";
-import { weekdayAbbr } from "@/lib/dates";
+import type { TaskActions } from "@/hooks/useTasks";
+import type {
+  Analytics,
+  AnalyticsCompletedDay,
+  AnalyticsCompletedTask,
+  AnalyticsDay,
+  Task,
+} from "@/lib/api";
+import { columnDateLabel, shortDate, staleLabel } from "@/lib/dates";
+import { colorDot, useFolderList } from "@/lib/folders";
 import { cn } from "@/lib/utils";
 
 interface AnalyticsViewProps {
   data: Analytics | undefined;
   isLoading: boolean;
-  weeks: 1 | 2;
-  onWeeksChange: (weeks: 1 | 2) => void;
   today: string;
+  staleTasks?: Task[];
+  actions?: TaskActions;
 }
 
 export function AnalyticsView({
   data,
   isLoading,
-  weeks,
-  onWeeksChange,
   today,
+  staleTasks,
+  actions,
 }: AnalyticsViewProps) {
-  const rangeToggle = (
-    <div className="flex items-center gap-1">
-      <Button
-        variant={weeks === 1 ? "subtle" : "ghost"}
-        size="sm"
-        onClick={() => onWeeksChange(1)}
-      >
-        1 semana
-      </Button>
-      <Button
-        variant={weeks === 2 ? "subtle" : "ghost"}
-        size="sm"
-        onClick={() => onWeeksChange(2)}
-      >
-        2 semanas
-      </Button>
-    </div>
-  );
-
   if (isLoading && !data) {
     return (
-      <div>
-        <div className="mb-5">{rangeToggle}</div>
-        <p className="px-2 py-8 text-sm text-muted-foreground">Cargando…</p>
+      <div className="py-12 text-center text-sm text-muted-foreground">
+        Cargando análisis…
       </div>
     );
   }
 
-  const days = data?.days ?? [];
+  const monthDays = data?.monthDays ?? [];
+  const weekCompletedDays = data?.weekCompletedDays ?? [];
+  const weekTotal = weekCompletedDays.reduce((acc, d) => acc + d.tasks.length, 0);
+  const oldestPendingTasks = (staleTasks ?? []).slice(0, 5);
+
+  return (
+    <div className="space-y-5">
+      {/* ── Fila superior: Heatmap compacto (izq) + 4-5 Tareas más antiguas sin completar (dcha) ── */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-stretch">
+        {/* Heatmap pequeño del mes */}
+        <MiniMonthHeatmap
+          monthName={data?.monthName ?? "Mes actual"}
+          monthDays={monthDays}
+          today={today}
+        />
+
+        {/* 4-5 tareas más antiguas que todavía no se han completado */}
+        <OldestPendingTasksPanel
+          tasks={oldestPendingTasks}
+          today={today}
+          actions={actions}
+        />
+      </div>
+
+      {/* ── Fila inferior: Tareas de los últimos 5 días en 5 columnas (una por día) ── */}
+      <WeeklyColumnsSection
+        weekDays={weekCompletedDays.slice(0, 5)}
+        weekTotal={weekTotal}
+        actions={actions}
+      />
+    </div>
+  );
+}
+
+// ─── Heatmap pequeño del mes ──────────────────────────────────────────────────
+
+const MINI_WEEKDAYS = ["L", "M", "X", "J", "V", "S", "D"];
+
+function MiniMonthHeatmap({
+  monthName,
+  monthDays,
+  today,
+}: {
+  monthName: string;
+  monthDays: AnalyticsDay[];
+  today: string;
+}) {
+  const startPadding = (() => {
+    if (monthDays.length === 0) return 0;
+    const firstDate = monthDays[0].date;
+    const [y, m, d] = firstDate.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    return (dt.getDay() + 6) % 7; // Lunes = 0, Domingo = 6
+  })();
+
+  const getHeatmapColor = (count: number, isFuture: boolean) => {
+    if (isFuture) return "bg-muted/15 border-border/20 text-muted-foreground/30";
+    if (count === 0) return "bg-muted/30 border-border/30 text-muted-foreground/50";
+    if (count <= 2)
+      return "bg-emerald-500/25 border-emerald-500/35 text-emerald-800 dark:text-emerald-300 font-semibold";
+    if (count <= 4)
+      return "bg-emerald-500/50 border-emerald-500/60 text-emerald-950 dark:text-emerald-100 font-bold";
+    return "bg-emerald-600 border-emerald-700 text-white font-bold shadow-xs";
+  };
+
+  return (
+    <div className="flex w-full flex-col justify-between rounded-2xl border border-border bg-surface p-4 shadow-xs md:w-[270px] md:shrink-0">
+      <div>
+        {/* Cabecera compacta */}
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+            <Calendar className="size-3.5 text-accent" />
+            <span>{monthName}</span>
+          </div>
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            Heatmap
+          </span>
+        </div>
+
+        {/* Días de la semana */}
+        <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-muted-foreground/75">
+          {MINI_WEEKDAYS.map((wd, i) => (
+            <div key={`${wd}-${i}`} className="py-0.5">
+              {wd}
+            </div>
+          ))}
+        </div>
+
+        {/* Celdas pequeñas */}
+        <div className="grid grid-cols-7 gap-1">
+          {Array.from({ length: startPadding }).map((_, i) => (
+            <div key={`mini-pad-${i}`} className="size-7" aria-hidden />
+          ))}
+
+          {monthDays.map((day) => {
+            const isToday = day.date === today;
+            const isFuture = day.date > today;
+            const dayNum = parseInt(day.date.split("-")[2], 10);
+            const colorClass = getHeatmapColor(day.count, isFuture);
+
+            return (
+              <div
+                key={day.date}
+                className={cn(
+                  "flex size-7 items-center justify-center rounded-md border text-[11px] transition-transform hover:scale-110",
+                  colorClass,
+                  isToday && "ring-2 ring-primary ring-offset-1 ring-offset-background",
+                )}
+                title={`${day.date}: ${day.count} ${day.count === 1 ? "tarea completada" : "tareas completadas"}`}
+              >
+                {dayNum}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Leyenda sutil */}
+      <div className="mt-3 flex items-center justify-between text-[10px] text-muted-foreground/80">
+        <span>Menos</span>
+        <div className="flex items-center gap-1">
+          <div className="size-2.5 rounded-xs border border-border/40 bg-muted/30" />
+          <div className="size-2.5 rounded-xs border border-emerald-500/35 bg-emerald-500/25" />
+          <div className="size-2.5 rounded-xs border border-emerald-500/60 bg-emerald-500/50" />
+          <div className="size-2.5 rounded-xs border border-emerald-700 bg-emerald-600" />
+        </div>
+        <span>Más</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Panel derecho: 4-5 tareas más antiguas sin completar ─────────────────────
+
+function OldestPendingTasksPanel({
+  tasks,
+  today,
+  actions,
+}: {
+  tasks: Task[];
+  today: string;
+  actions?: TaskActions;
+}) {
+  const folders = useFolderList();
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col justify-between rounded-2xl border border-border bg-surface p-4 shadow-xs">
+      {/* Cabecera */}
+      <div className="mb-2 flex items-center justify-between border-b border-border/60 pb-2">
+        <div className="flex items-center gap-1.5">
+          <Hourglass className="size-3.5 text-warning" />
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
+            Tareas más antiguas sin completar
+          </h3>
+        </div>
+        <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">
+          {tasks.length} pendientes
+        </span>
+      </div>
+
+      {/* Lista de las 4-5 tareas */}
+      {tasks.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center py-8 text-center text-xs text-muted-foreground">
+          🎉 ¡Al día! No tienes tareas pendientes antiguas.
+        </div>
+      ) : (
+        <div className="flex flex-1 flex-col justify-around divide-y divide-border/50">
+          {tasks.map((task) => {
+            const folder = folders.find((f) => f.id === task.folderId);
+
+            return (
+              <div
+                key={task.id}
+                className="group -mx-1.5 flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 transition-colors hover:bg-muted/30"
+              >
+                {actions && (
+                  <TaskCircle
+                    completed={task.isCompleted}
+                    fresh={task.completedOnViewedDay}
+                    onToggle={() =>
+                      actions.toggleComplete.mutate({
+                        id: task.id,
+                        completed: task.isCompleted,
+                        date: today,
+                      })
+                    }
+                  />
+                )}
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className="truncate text-[12px] font-medium text-foreground"
+                      title={task.title}
+                    >
+                      {task.title}
+                    </span>
+                    {folder && (
+                      <span className="hidden shrink-0 items-center gap-1 text-[10px] text-faded sm:flex">
+                        <span
+                          className={cn("size-1.5 rounded-full", colorDot(folder.color))}
+                        />
+                        {folder.name}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Asignada para {shortDate(task.scheduledDate)}
+                  </p>
+                </div>
+
+                <span
+                  className={cn(
+                    "flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                    task.taskAge >= 30
+                      ? "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"
+                      : task.taskAge >= 14
+                        ? "bg-orange-50 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400"
+                        : task.taskAge >= 7
+                          ? "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
+                          : "bg-muted text-muted-foreground",
+                  )}
+                  title={`Creada hace ${task.taskAge} días`}
+                >
+                  <Hourglass className="size-2.5" />
+                  {task.taskAge > 0 ? staleLabel(task.taskAge) : "Hoy"}
+                </span>
+
+                {actions && (
+                  <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100">
+                    <Button
+                      variant="ghost"
+                      size="iconSm"
+                      className="size-6 p-0"
+                      title="Asignar para hoy"
+                      onClick={() =>
+                        actions.update.mutate({
+                          id: task.id,
+                          input: { scheduledDate: today },
+                        })
+                      }
+                    >
+                      <CalendarDays className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="iconSm"
+                      className="size-6 p-0"
+                      title="Mandar al archivo"
+                      onClick={() => actions.archive.mutate(task.id)}
+                    >
+                      <Archive className="size-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Tareas de la última semana en 7 columnas ─────────────────────────────────
+
+function WeeklyColumnsSection({
+  weekDays,
+  weekTotal,
+  actions,
+}: {
+  weekDays: AnalyticsCompletedDay[];
+  weekTotal: number;
+  actions?: TaskActions;
+}) {
+  const folders = useFolderList();
 
   return (
     <div>
-      <div className="mb-4">{rangeToggle}</div>
-
-      {/* Layout principal: gráfico izquierda, tarjetas derecha */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        {/* Gráfico de línea */}
-        <div className="min-w-0 flex-1">
-          <LineChart days={days} today={today} />
-        </div>
-
-        {/* Tarjetas de métricas */}
-        <div className="flex flex-row gap-3 lg:w-56 lg:flex-col">
-          <MetricCard
-            icon={<BarChart3 className="size-4" />}
-            label="TOTAL"
-            value={data?.total ?? 0}
-            unit="tareas hechas"
-          />
-          <MetricCard
-            icon={<TrendingUp className="size-4" />}
-            label="MEDIA"
-            value={data?.dailyAverage ?? 0}
-            unit="por día"
-          />
-          <MetricCard
-            icon={<Trophy className="size-4" />}
-            label="MEJOR DÍA"
-            value={data?.bestDay ?? 0}
-            unit="tareas"
-          />
-          <MetricCard
-            icon={<Flame className="size-4" />}
-            label="RACHA"
-            value={data?.currentStreak ?? 0}
-            unit={data?.currentStreak === 1 ? "día" : "días"}
-            highlight={(data?.currentStreak ?? 0) > 0}
-            badge={(data?.currentStreak ?? 0) > 0 ? "¡SIGUE ASÍ!" : undefined}
-          />
-        </div>
+      <div className="mb-2.5 flex items-center justify-between px-1">
+        <h2 className="flex items-center gap-1.5 text-[14px] font-semibold tracking-tight text-foreground">
+          <CheckCircle2 className="size-4 text-emerald-500" />
+          Tareas completadas en los últimos 5 días
+        </h2>
+        <span className="text-xs font-medium text-muted-foreground">
+          {weekTotal} {weekTotal === 1 ? "tarea en total" : "tareas en total"}
+        </span>
       </div>
-    </div>
-  );
-}
 
-// ─── Tarjeta de métrica ───────────────────────────────────────────────────────
+      {/* Contenedor de 5 columnas */}
+      <div className="flex gap-2.5 overflow-x-auto pb-2 md:grid md:grid-cols-5 md:gap-2.5">
+        {weekDays.map((dayGroup) => {
+          const { title, subtitle } = columnDateLabel(dayGroup.date);
+          const hasTasks = dayGroup.tasks.length > 0;
 
-function MetricCard({
-  icon,
-  label,
-  value,
-  unit,
-  highlight = false,
-  badge,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  unit: string;
-  highlight?: boolean;
-  badge?: string;
-}) {
-  return (
-    <div className="flex-1 rounded-xl border border-border bg-surface p-3 lg:flex-none">
-      <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground [&_svg]:size-3.5">
-        {icon}
-        {label}
-      </div>
-      <div className="flex items-end justify-between gap-2">
-        <div className="flex items-baseline gap-1.5">
-          <span
-            className={cn(
-              "text-[26px] font-semibold tabular-nums leading-none",
-              highlight ? "text-accent" : "text-foreground",
-            )}
-          >
-            {value}
-          </span>
-          <span className="text-[11px] text-faded">{unit}</span>
-        </div>
-        {badge && (
-          <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-semibold text-accent">
-            {badge}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Gráfico de línea SVG ─────────────────────────────────────────────────────
-
-const SVG_W = 600;
-const SVG_H = 220;
-const PAD = { top: 28, right: 16, bottom: 40, left: 36 };
-const INNER_W = SVG_W - PAD.left - PAD.right;
-const INNER_H = SVG_H - PAD.top - PAD.bottom;
-
-function LineChart({
-  days,
-  today,
-}: {
-  days: Analytics["days"];
-  today: string;
-}) {
-  if (days.length === 0) {
-    return (
-      <div className="flex h-[220px] items-center justify-center rounded-xl border border-border bg-surface">
-        <p className="text-sm text-muted-foreground">Sin datos para este periodo.</p>
-      </div>
-    );
-  }
-
-  const counts = days.map((d) => d.count);
-  const maxVal = Math.max(...counts, 1);
-  const yMax = Math.ceil(maxVal / 5) * 5 + 2; // redondear al 5 superior
-  const bestIdx = counts.indexOf(Math.max(...counts));
-
-  const xStep = INNER_W / Math.max(days.length - 1, 1);
-
-  const px = (i: number) => PAD.left + i * xStep;
-  const py = (v: number) => PAD.top + INNER_H - (v / yMax) * INNER_H;
-
-  // Path de la línea
-  const linePts = days.map((d, i) => `${px(i)},${py(d.count)}`);
-  const linePath = `M ${linePts.join(" L ")}`;
-
-  // Path del área
-  const areaPath =
-    `M ${px(0)},${py(0)} ` +
-    days.map((d, i) => `L ${px(i)},${py(d.count)}`).join(" ") +
-    ` L ${px(days.length - 1)},${py(0)} Z`;
-
-  // Etiquetas del eje Y
-  const yTicks = [0, Math.round(yMax / 4), Math.round(yMax / 2), Math.round((3 * yMax) / 4), yMax];
-
-  return (
-    <div className="overflow-hidden rounded-xl border border-border bg-surface">
-      <svg
-        viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-        className="w-full"
-        style={{ height: "auto", aspectRatio: `${SVG_W}/${SVG_H}` }}
-        aria-hidden
-      >
-        <defs>
-          <linearGradient id="areaGrad" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.5" />
-            <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.2" />
-          </linearGradient>
-          <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#8b5cf6" />
-            <stop offset="100%" stopColor="#06b6d4" />
-          </linearGradient>
-          <clipPath id="chartClip">
-            <rect x={PAD.left} y={PAD.top} width={INNER_W} height={INNER_H} />
-          </clipPath>
-        </defs>
-
-        {/* Líneas guía horizontales */}
-        {yTicks.slice(1).map((tick) => (
-          <line
-            key={tick}
-            x1={PAD.left}
-            y1={py(tick)}
-            x2={PAD.left + INNER_W}
-            y2={py(tick)}
-            stroke="currentColor"
-            strokeOpacity="0.08"
-            strokeWidth="1"
-          />
-        ))}
-
-        {/* Etiquetas eje Y */}
-        {yTicks.map((tick) => (
-          <text
-            key={tick}
-            x={PAD.left - 6}
-            y={py(tick) + 4}
-            textAnchor="end"
-            fontSize="10"
-            fill="currentColor"
-            opacity="0.4"
-          >
-            {tick}
-          </text>
-        ))}
-
-        {/* Área rellena */}
-        <path d={areaPath} fill="url(#areaGrad)" clipPath="url(#chartClip)" />
-
-        {/* Línea */}
-        <path
-          d={linePath}
-          fill="none"
-          stroke="url(#lineGrad)"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          clipPath="url(#chartClip)"
-        />
-
-        {/* Puntos */}
-        {days.map((d, i) => {
-          const isToday = d.date === today;
-          const isRecord = i === bestIdx && d.count > 0;
           return (
-            <circle
-              key={d.date}
-              cx={px(i)}
-              cy={py(d.count)}
-              r={isToday ? 5 : isRecord ? 5 : 4}
-              fill={isToday ? "#8b5cf6" : "#06b6d4"}
-              stroke="white"
-              strokeWidth="1.5"
-            />
-          );
-        })}
-
-        {/* Tooltip "DÍA DE RÉCORD" */}
-        {bestIdx >= 0 && days[bestIdx]?.count > 0 && (() => {
-          const bx = px(bestIdx);
-          const by = py(days[bestIdx].count);
-          const label = "🎉 DÍA DE RÉCORD";
-          const boxW = label.length * 6.2 + 16;
-          const boxH = 22;
-          // Si está muy a la derecha, alinear a la izquierda
-          const tooltipX = bx + boxW / 2 > SVG_W - PAD.right
-            ? bx - boxW
-            : bx - boxW / 2;
-          return (
-            <g>
-              <rect
-                x={tooltipX}
-                y={by - boxH - 10}
-                width={boxW}
-                height={boxH}
-                rx="6"
-                fill="white"
-                stroke="#e5e7eb"
-                strokeWidth="1"
-                filter="drop-shadow(0 1px 3px rgba(0,0,0,0.10))"
-              />
-              <text
-                x={tooltipX + boxW / 2}
-                y={by - 10 - boxH / 2 + 4}
-                textAnchor="middle"
-                fontSize="9.5"
-                fontWeight="700"
-                fill="#374151"
-              >
-                {label}
-              </text>
-            </g>
-          );
-        })()}
-
-        {/* Etiquetas eje X */}
-        {days.map((d, i) => {
-          // Mostrar solo algunas etiquetas si hay muchos días para no amontonar
-          const show = days.length <= 7 ? true : i % 2 === 0 || i === days.length - 1;
-          if (!show) return null;
-          return (
-            <text
-              key={d.date}
-              x={px(i)}
-              y={SVG_H - 8}
-              textAnchor="middle"
-              fontSize="10"
-              fill="currentColor"
-              opacity={d.date === today ? "0.9" : "0.45"}
-              fontWeight={d.date === today ? "700" : "400"}
+            <div
+              key={dayGroup.date}
+              className="flex min-w-[130px] flex-1 flex-col rounded-xl border border-border bg-surface p-2 shadow-2xs md:min-w-0"
             >
-              {weekdayAbbr(d.date)}
-            </text>
+              {/* Encabezado de la columna */}
+              <div className="mb-2 flex items-center justify-between border-b border-border/60 pb-1.5">
+                <div className="min-w-0">
+                  <p className="truncate text-[12px] font-bold leading-tight text-foreground">
+                    {title}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">{subtitle}</p>
+                </div>
+                <span
+                  className={cn(
+                    "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold tabular-nums",
+                    hasTasks
+                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
+                      : "bg-muted text-muted-foreground/60",
+                  )}
+                >
+                  {dayGroup.tasks.length}
+                </span>
+              </div>
+
+              {/* Lista vertical de tareas en esta columna */}
+              <div className="flex flex-1 flex-col space-y-1.5 overflow-y-auto max-h-[260px] pr-0.5">
+                {!hasTasks ? (
+                  <div className="flex flex-1 items-center justify-center py-6 text-xs text-muted-foreground/40">
+                    —
+                  </div>
+                ) : (
+                  dayGroup.tasks.map((task) => (
+                    <WeeklyTaskItem
+                      key={task.id}
+                      task={task}
+                      folders={folders}
+                      actions={actions}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
           );
         })}
-      </svg>
+      </div>
+    </div>
+  );
+}
+
+function WeeklyTaskItem({
+  task,
+  folders,
+  actions,
+}: {
+  task: AnalyticsCompletedTask;
+  folders: ReturnType<typeof useFolderList>;
+  actions?: TaskActions;
+}) {
+  const folder = folders.find((f) => f.id === task.folderId);
+
+  return (
+    <div
+      className="group relative flex flex-col rounded-lg border border-border/60 bg-muted/20 p-1.5 transition-colors hover:bg-muted/40"
+      title={task.title}
+    >
+      <div className="flex items-start gap-1.5">
+        {actions ? (
+          <button
+            type="button"
+            onClick={() =>
+              actions.toggleComplete.mutate({
+                id: task.id,
+                completed: true,
+                date: task.completedOn,
+              })
+            }
+            className="mt-0.5 shrink-0 text-emerald-600 transition-colors hover:text-emerald-700"
+            title="Desmarcar"
+          >
+            <CheckCircle2 className="size-3.5 fill-emerald-100 dark:fill-emerald-950/60" />
+          </button>
+        ) : (
+          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600" />
+        )}
+
+        <span className="line-clamp-2 text-[11px] font-medium leading-snug text-foreground">
+          {task.title}
+        </span>
+      </div>
+
+      {folder && (
+        <div className="mt-1 flex items-center gap-1 pl-5 text-[9px] text-faded">
+          <span className={cn("size-1.5 shrink-0 rounded-full", colorDot(folder.color))} />
+          <span className="truncate">{folder.name}</span>
+        </div>
+      )}
     </div>
   );
 }

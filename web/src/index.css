@@ -18,6 +18,22 @@
   --carry-soft: #fdf3e3;
 }
 
+.gray {
+  --background: #b2b8c2;
+  --surface: #c4cad4;
+  --foreground: #090b0e;
+  --muted: #a6afbe;
+  --muted-foreground: #343a45;
+  --faded: #525a67;
+  --border: #98a1af;
+  --accent: #1d4ed8;
+  --accent-soft: #b3ccf5;
+  --danger: #b91c1c;
+  --warning: #b45309;
+  --carry: #92400e;
+  --carry-soft: #fde68a;
+}
+
 .dark {
   --background: #0e0e11;
   --surface: #17171b;
@@ -54,6 +70,10 @@
 }
 
 html {
+  color-scheme: light;
+}
+
+html.gray {
   color-scheme: light;
 }
 

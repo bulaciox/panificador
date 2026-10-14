@@ -7,6 +7,7 @@ import {
   EyeOff,
   Flag,
   FolderIcon,
+  Hourglass,
   MoreHorizontal,
   Plus,
   RotateCcw,
@@ -29,7 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { TaskActions } from "@/hooks/useTasks";
 import type { PriorityValue, Task } from "@/lib/api";
-import { carriedLabel, shiftIso, shortDate, todayIso } from "@/lib/dates";
+import { carriedLabel, shiftIso, shortDate, staleLabel, todayIso } from "@/lib/dates";
 import { colorDot, useFolderList } from "@/lib/folders";
 import { PRIORITY_META, PRIORITY_ORDER } from "@/lib/priority";
 import { cn } from "@/lib/utils";
@@ -154,6 +155,24 @@ export function TaskRow({
           <span className="flex shrink-0 items-center gap-1 rounded-full bg-carry-soft px-2 py-0.5 text-[11px] font-medium text-carry">
             <RotateCcw className="size-3" />
             {carriedLabel(task.daysCarried)}
+          </span>
+        )}
+
+        {/* Tarea estancada: creada hace semanas/meses y sigue pendiente */}
+        {depth === 0 && !done && task.taskAge >= 7 && (
+          <span
+            className={cn(
+              "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
+              task.taskAge >= 30
+                ? "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"
+                : task.taskAge >= 14
+                  ? "bg-orange-50 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400"
+                  : "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400",
+            )}
+            title={`Creada hace ${task.taskAge} días`}
+          >
+            <Hourglass className="size-3" />
+            {staleLabel(task.taskAge)}
           </span>
         )}
 

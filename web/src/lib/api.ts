@@ -30,6 +30,8 @@ export interface Task {
   plannedStart: string | null;
   /** Duración del bloque en minutos, null = sin hora. */
   plannedMinutes: number | null;
+  /** Días transcurridos desde que se creó la tarea. */
+  taskAge: number;
 }
 
 export interface Day {
@@ -43,6 +45,7 @@ export interface Folder {
   color: string;
   sortOrder: number;
   pending: number;
+  isExcluded: boolean;
 }
 
 /** 1 = cumplido, 2 = saltado (mantiene el color pero no sube la racha). */
@@ -103,12 +106,31 @@ export interface AnalyticsDay {
   count: number;
 }
 
+export interface AnalyticsCompletedTask {
+  id: string;
+  title: string;
+  completedOn: string;
+  folderId?: string | null;
+  folderName?: string | null;
+  folderColor?: string | null;
+  priority: PriorityValue;
+}
+
+export interface AnalyticsCompletedDay {
+  date: string;
+  tasks: AnalyticsCompletedTask[];
+}
+
 export interface Analytics {
   days: AnalyticsDay[];
   total: number;
   bestDay: number;
   currentStreak: number;
   dailyAverage: number;
+  monthTotal: number;
+  monthName: string;
+  monthDays: AnalyticsDay[];
+  weekCompletedDays: AnalyticsCompletedDay[];
 }
 
 export interface CreateTaskInput {
@@ -185,8 +207,10 @@ export const api = {
 
   counts: () => request<Counts>("/api/counts"),
 
-  analytics: (from: string, to: string) =>
-    request<Analytics>(`/api/analytics?from=${from}&to=${to}`),
+  analytics: (from?: string, to?: string) =>
+    request<Analytics>(from && to ? `/api/analytics?from=${from}&to=${to}` : "/api/analytics"),
+
+  stale: () => request<Task[]>("/api/analytics/stale"),
 
   hidden: (date: string) => request<Task[]>(`/api/days/${date}/hidden`),
 
@@ -199,7 +223,7 @@ export const api = {
   createFolder: (name: string, color: string) =>
     post<Folder>("/api/folders", { name, color }),
 
-  updateFolder: (id: string, input: { name?: string; color?: string }) =>
+  updateFolder: (id: string, input: { name?: string; color?: string; isExcluded?: boolean }) =>
     request<Folder>(`/api/folders/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
 
   deleteFolder: (id: string) => request<void>(`/api/folders/${id}`, { method: "DELETE" }),

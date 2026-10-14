@@ -17,7 +17,7 @@ import { SortToggle } from "@/components/SortToggle";
 import { StrengthsView, strengthStreak } from "@/components/StrengthsView";
 import { UpcomingView } from "@/components/UpcomingView";
 import { Button } from "@/components/ui/button";
-import { useAnalytics } from "@/hooks/useAnalytics";
+import { useAnalytics, useStale } from "@/hooks/useAnalytics";
 import { useHabitActions, useHabits } from "@/hooks/useHabits";
 import { useStrengthActions, useStrengths } from "@/hooks/useStrengths";
 import {
@@ -40,20 +40,26 @@ import { cn } from "@/lib/utils";
  * Portería de la app: tema y candado. Mientras haga falta contraseña no se monta el resto,
  * así que no se dispara ninguna consulta a la API antes de tener sesión.
  */
+export type Theme = "light" | "gray" | "dark";
+
 export default function App() {
   const queryClient = useQueryClient();
   const [locked, setLocked] = useState(false);
-  const [dark, setDark] = useState(
-    () =>
-      localStorage.getItem("theme") === "dark" ||
-      (localStorage.getItem("theme") === null &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches),
-  );
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved === "light" || saved === "gray" || saved === "dark") return saved;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-    localStorage.setItem("theme", dark ? "dark" : "light");
-  }, [dark]);
+    document.documentElement.classList.remove("dark", "gray");
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else if (theme === "gray") {
+      document.documentElement.classList.add("gray");
+    }
+    localStorage.setItem("theme", theme);
+  }, [theme]);
 
   const auth = useQuery({
     queryKey: ["auth"],
@@ -72,8 +78,6 @@ export default function App() {
     if (auth.data) setLocked(auth.data.required && !auth.data.authenticated);
   }, [auth.data]);
 
-  const toggleTheme = () => setDark((value) => !value);
-
   if (auth.isPending) return <div className="min-h-screen bg-background" />;
 
   if (locked) {
@@ -87,10 +91,10 @@ export default function App() {
     );
   }
 
-  return <Planner dark={dark} onToggleTheme={toggleTheme} />;
+  return <Planner theme={theme} onSetTheme={setTheme} />;
 }
 
-function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
+function Planner({ theme, onSetTheme }: { theme: Theme; onSetTheme: (t: Theme) => void }) {
   const [view, setView] = useState<View>({ kind: "today" });
   const [date, setDate] = useState(todayIso());
   const [menuOpen, setMenuOpen] = useState(false);
@@ -101,10 +105,17 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
   const [sortByPriority, setSortByPriority] = useState(
     () => localStorage.getItem("sortByPriority") === "true",
   );
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem("sidebarCollapsed") === "true",
+  );
 
   useEffect(() => {
     localStorage.setItem("sortByPriority", String(sortByPriority));
   }, [sortByPriority]);
+
+  useEffect(() => {
+    localStorage.setItem("sidebarCollapsed", String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     localStorage.setItem("agendaOpen", String(agendaOpen));
@@ -136,13 +147,8 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
   const strengths = useStrengths(isStrengths);
   const strengthActions = useStrengthActions();
 
-  // Ventana de análisis: 1 ó 2 semanas, a elección del usuario.
-  const [analyticsWeeks, setAnalyticsWeeks] = useState<1 | 2>(2);
-  const analyticsWindow = useMemo(() => {
-    const today = todayIso();
-    return { from: shiftIso(today, -(analyticsWeeks * 7 - 1)), to: today };
-  }, [analyticsWeeks]);
-  const analytics = useAnalytics(analyticsWindow.from, analyticsWindow.to, isAnalytics);
+  const analytics = useAnalytics(isAnalytics);
+  const stale = useStale(isAnalytics);
 
   const folders = useFolders();
   const counts = useCounts();
@@ -183,10 +189,12 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
           folders={folderList}
           counts={counts.data}
           folderActions={folderActions}
-          dark={dark}
-          onToggleTheme={onToggleTheme}
+          theme={theme}
+          onSetTheme={onSetTheme}
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
         />
 
         <div className="flex min-w-0 flex-1">
@@ -266,7 +274,7 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
             {isAnalytics && (
               <ViewHeader
                 title="Análisis"
-                subtitle={analyticsSubtitle(analytics.data?.currentStreak ?? 0)}
+                subtitle={analyticsSubtitle()}
               />
             )}
 
@@ -354,9 +362,9 @@ function Planner({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => 
               <AnalyticsView
                 data={analytics.data}
                 isLoading={analytics.isLoading}
-                weeks={analyticsWeeks}
-                onWeeksChange={setAnalyticsWeeks}
                 today={todayIso()}
+                staleTasks={stale.data}
+                actions={actions}
               />
             )}
           </main>
@@ -386,11 +394,8 @@ function strengthSubtitle(streak: number): string {
   return `${streak} días seguidos apuntando algo. No lo rompas.`;
 }
 
-/** El subtítulo de Análisis motiva según la racha de días productivos. */
-function analyticsSubtitle(streak: number): string {
-  if (streak === 0) return "Tu ritmo de tareas completadas, día a día.";
-  if (streak === 1) return "Un día productivo. A por el siguiente.";
-  return `${streak} días seguidos completando tareas. Sigue así.`;
+function analyticsSubtitle(): string {
+  return "Tu ritmo de tareas completadas, día a día.";
 }
 
 function ViewHeader({

@@ -25,6 +25,9 @@ public static class TaskMapper
         var hasTime = task.StartTime is not null && task.DurationMinutes is not null;
         var hasplan = hasTime && task.PlannedOn == viewedDate;
 
+        var createdDate = DateOnly.FromDateTime(task.CreatedAt.LocalDateTime);
+        var taskAge = Math.Max(0, viewedDate.DayNumber - createdDate.DayNumber);
+
         return new TaskDto(
             task.Id,
             task.Title,
@@ -43,7 +46,8 @@ public static class TaskMapper
             task.CompletedOn == viewedDate,
             children,
             hasplan ? task.StartTime!.Value.ToString("HH:mm") : null,
-            hasplan ? task.DurationMinutes : null
+            hasplan ? task.DurationMinutes : null,
+            taskAge
         );
     }
 

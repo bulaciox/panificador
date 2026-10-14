@@ -27,6 +27,23 @@ export function longLabel(iso: string): string {
   return capitalize(format(date, "EEEE, d 'de' MMMM", { locale: es }));
 }
 
+/** Formato amigable para el encabezado de días completados (ej. "Hoy, 14 de octubre", "Ayer, 13 de octubre"). */
+export function dayHeaderLabel(iso: string): string {
+  const date = fromIsoDate(iso);
+  const formatted = format(date, "EEEE, d 'de' MMMM", { locale: es });
+  if (isToday(date)) return `Hoy, ${format(date, "d 'de' MMMM", { locale: es })}`;
+  if (isYesterday(date)) return `Ayer, ${format(date, "d 'de' MMMM", { locale: es })}`;
+  return capitalize(formatted);
+}
+
+/** Título y subtítulo para las columnas de los últimos 7 días. */
+export function columnDateLabel(iso: string): { title: string; subtitle: string } {
+  const date = fromIsoDate(iso);
+  const dayMonth = format(date, "d MMM", { locale: es });
+  const weekday = capitalize(format(date, "EEEE", { locale: es }));
+  return { title: weekday, subtitle: dayMonth };
+}
+
 /** true cuando longLabel devuelve "Hoy"/"Mañana"/"Ayer" en vez de la fecha. */
 export function isRelativeLabel(iso: string): boolean {
   const date = fromIsoDate(iso);
@@ -76,6 +93,22 @@ export function carriedLabel(days: number): string {
   if (days < 30) return `${Math.floor(days / 7)} semanas`;
   if (days < 60) return "1 mes";
   return `${Math.floor(days / 30)} meses`;
+}
+
+/** "1 sem", "2 sem", "1 mes"… para indicar cuánto tiempo lleva creada la tarea. */
+export function staleLabel(days: number): string {
+  if (days < 14) return "1 sem";
+  if (days < 30) return `${Math.floor(days / 7)} sem`;
+  if (days < 60) return "1 mes";
+  if (days < 365) return `${Math.floor(days / 30)} meses`;
+  return "+1 año";
+}
+
+export function staleLevel(days: number): "none" | "aging" | "stale" | "critical" {
+  if (days < 7) return "none";
+  if (days < 14) return "aging";
+  if (days < 30) return "stale";
+  return "critical";
 }
 
 function capitalize(value: string): string {
