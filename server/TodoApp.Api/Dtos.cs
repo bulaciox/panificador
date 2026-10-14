@@ -35,7 +35,7 @@ public record DayDto(DateOnly Date, List<TaskDto> Tasks);
 public record FolderDto(Guid Id, string Name, string Color, int SortOrder, int Pending, bool IsExcluded);
 
 /// <summary>Contadores de la barra lateral.</summary>
-public record CountsDto(int Today, int Upcoming, int Archived);
+public record CountsDto(int Today, int Upcoming, int Archived, int Stale);
 
 public record CreateTaskRequest(
     string Title,

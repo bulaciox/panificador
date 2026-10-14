@@ -14,6 +14,7 @@ import { HabitsView } from "@/components/HabitsView";
 import { LoginScreen } from "@/components/LoginScreen";
 import { Sidebar, type View } from "@/components/Sidebar";
 import { SortToggle } from "@/components/SortToggle";
+import { StaleTasksView } from "@/components/StaleTasksView";
 import { StrengthsView, strengthStreak } from "@/components/StrengthsView";
 import { UpcomingView } from "@/components/UpcomingView";
 import { Button } from "@/components/ui/button";
@@ -132,6 +133,7 @@ function Planner({ theme, onSetTheme }: { theme: Theme; onSetTheme: (t: Theme) =
   const isHabits = view.kind === "habits";
   const isStrengths = view.kind === "strengths";
   const isAnalytics = view.kind === "analytics";
+  const isStale = view.kind === "stale";
   // Fuera de la vista de un día, lo que se crea o se completa cuenta como de hoy.
   const viewedDate = isDay ? date : todayIso();
 
@@ -148,7 +150,7 @@ function Planner({ theme, onSetTheme }: { theme: Theme; onSetTheme: (t: Theme) =
   const strengthActions = useStrengthActions();
 
   const analytics = useAnalytics(isAnalytics);
-  const stale = useStale(isAnalytics);
+  const stale = useStale(isAnalytics || isStale);
 
   const folders = useFolders();
   const counts = useCounts();
@@ -278,6 +280,13 @@ function Planner({ theme, onSetTheme }: { theme: Theme; onSetTheme: (t: Theme) =
               />
             )}
 
+            {isStale && (
+              <ViewHeader
+                title="Antiguas"
+                subtitle="Tareas acumuladas en el tiempo. Desbloquéalas superando el perfeccionismo."
+              />
+            )}
+
             {showComposer && (
               <div className="mb-4">
                 <AddTaskBar
@@ -364,6 +373,15 @@ function Planner({ theme, onSetTheme }: { theme: Theme; onSetTheme: (t: Theme) =
                 isLoading={analytics.isLoading}
                 today={todayIso()}
                 staleTasks={stale.data}
+                actions={actions}
+              />
+            )}
+
+            {isStale && (
+              <StaleTasksView
+                tasks={stale.data}
+                isLoading={stale.isLoading}
+                today={todayIso()}
                 actions={actions}
               />
             )}

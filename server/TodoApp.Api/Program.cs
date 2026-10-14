@@ -203,8 +203,9 @@ api.MapGet("/counts", async (TodoDbContext db) =>
     var upcoming = all.Count(t => !t.IsArchived && t.CompletedOn is null && t.ScheduledDate > today &&
         (t.FolderId == null || !excludedFolderIds.Contains(t.FolderId.Value)));
     var archived = all.Count(t => t.IsArchived && t.ParentId is null);
+    var stale = all.Count(t => !t.IsArchived && t.CompletedOn is null && t.ParentId is null);
 
-    return Results.Ok(new CountsDto(todayCount, upcoming, archived));
+    return Results.Ok(new CountsDto(todayCount, upcoming, archived, stale));
 });
 
 // Análisis de productividad: cuántas tareas se completaron cada día del rango,
@@ -334,7 +335,7 @@ api.MapGet("/analytics/stale", async (TodoDbContext db) =>
 
     var results = stale
         .OrderBy(t => t.CreatedAt)
-        .Take(15)
+        .Take(100)
         .Select(t => TaskMapper.ToDto(t, today, childrenByParent))
         .ToList();
 

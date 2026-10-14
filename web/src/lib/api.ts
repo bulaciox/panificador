@@ -99,6 +99,7 @@ export interface Counts {
   today: number;
   upcoming: number;
   archived: number;
+  stale?: number;
 }
 
 export interface AnalyticsDay {

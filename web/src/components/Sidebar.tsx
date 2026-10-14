@@ -9,6 +9,7 @@ import {
   EyeOff,
   Flame,
   Folder as FolderIcon,
+  Hourglass,
   Moon,
   MoreHorizontal,
   Palette,
@@ -44,6 +45,7 @@ import { cn } from "@/lib/utils";
 export type View =
   | { kind: "today" }
   | { kind: "upcoming" }
+  | { kind: "stale" }
   | { kind: "archive" }
   | { kind: "folder"; id: string }
   | { kind: "habits" }
@@ -123,6 +125,14 @@ export function Sidebar({
             active={view.kind === "upcoming"}
             collapsed={collapsed}
             onClick={() => onSelect({ kind: "upcoming" })}
+          />
+          <NavItem
+            icon={<Hourglass className="size-4" />}
+            label="Antiguas"
+            count={counts?.stale}
+            active={view.kind === "stale"}
+            collapsed={collapsed}
+            onClick={() => onSelect({ kind: "stale" })}
           />
           <NavItem
             icon={<Archive className="size-4" />}
